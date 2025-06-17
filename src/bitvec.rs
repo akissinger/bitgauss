@@ -3,26 +3,74 @@ use rayon::prelude::*;
 use ref_cast::RefCast;
 use std::fmt;
 pub use std::ops::{BitAndAssign, BitXorAssign, Deref, DerefMut, Index, IndexMut, Range};
-pub type BitBlock = u64;
-pub const BLOCKSIZE: usize = 64;
-pub const MSB_OFF: u64 = 0x7fffffffffffffff;
-pub const MSB_ON: u64 = 0x8000000000000000;
 
+/// A block of bits. This is an alias for [`u64`]
+pub type BitBlock = u64;
+
+/// Number of bits in a [`BitBlock`]
+pub const BLOCKSIZE: usize = 64;
+
+/// Bitwise AND with this constant to set most signficant bit to zero
+pub const MSB_OFF: BitBlock = 0x7fffffffffffffff;
+
+/// Bitwise OR with this constant to set most signficant bit to one
+pub const MSB_ON: BitBlock = 0x8000000000000000;
+
+/// Returns the minimum number of [`BitBlock`]s required to store the given number of bits.
+///
+/// # Arguments
+///
+/// * `bits` - The number of bits to store.
+///
+/// # Returns
+///
+/// The minimum number of [`BitBlock`]s (each of size [`BLOCKSIZE`]) needed to store `bits` bits.
+/// If `bits` is not a multiple of [`BLOCKSIZE`], the result is rounded up to ensure all bits fit.
 #[inline]
 pub fn min_blocks(bits: usize) -> usize {
     bits / BLOCKSIZE + if bits % BLOCKSIZE == 0 { 0 } else { 1 }
 }
 
+/// A vector of bits, stored efficiently as a vector of [`BitBlock`]s (which alias to `u64`).
+///
+/// `BitVec` provides a compact and performant way to store and manipulate large bit vectors.
+/// It supports bitwise operations, random and zero/one initialization, and conversion to and from
+/// boolean vectors. The bits are packed into 64-bit blocks, and the struct offers methods for
+/// accessing, setting, and iterating over individual bits or ranges of bits.
+///
+/// # Examples
+///
+/// ```
+/// use bitgauss::bitvec::*;
+///
+/// // Create a BitVec of 256 bits, all set to zero
+/// let mut bv = BitVec::zeros(4);
+/// bv.set_bit(5, true);
+/// assert!(bv.bit(5));
+/// ```
+///
+/// # Note
+///
+/// Many methods are implemented via dereferencing to [`BitRange`], which provides
+/// additional bitwise and range operations.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct BitVec(Vec<BitBlock>);
+
+/// A range of bits, represented as a slice of [`BitBlock`]s.
+///
+/// Provides methods for bitwise operations, iteration, and bit access within the range.
 #[derive(RefCast, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(transparent)]
 pub struct BitRange([BitBlock]);
 
+/// Iterator over the bits in a [`BitRange`].
+///
+/// Yields each bit as a `bool`, starting from the most significant bit of the first block.
 pub struct BitRangeIter<'a> {
     inner: std::slice::Iter<'a, BitBlock>,
     c: usize,
     block: BitBlock,
 }
-
 impl<'a> Iterator for BitRangeIter<'a> {
     type Item = bool;
     fn next(&mut self) -> Option<Self::Item> {
@@ -38,11 +86,19 @@ impl<'a> Iterator for BitRangeIter<'a> {
 }
 
 impl BitRange {
+    /// Returns a copy of the range as a [`BitVec`].
     #[inline]
     pub fn to_vec(&self) -> BitVec {
         self.0.to_vec().into()
     }
 
+    /// Divides the range into mutable parallel chunks of the given size.
+    ///
+    /// Useful for parallel processing over disjoint bit regions.
+    ///
+    /// # Arguments
+    ///
+    /// * `chunk_size` - Number of blocks per chunk.
     #[inline]
     pub fn par_chunks_mut(
         &mut self,
@@ -53,16 +109,19 @@ impl BitRange {
             .map(|x| BitRange::ref_cast_mut(x))
     }
 
+    /// Returns an iterator over the [`BitBlock`]s in this range.
     #[inline]
     pub fn block_iter(&self) -> impl Iterator<Item = BitBlock> {
         self.0.iter().copied()
     }
 
+    /// Returns a mutable iterator over the [`BitBlock`]s in this range.
     #[inline]
     pub fn block_iter_mut(&mut self) -> impl Iterator<Item = &mut BitBlock> {
         self.0.iter_mut()
     }
 
+    /// Returns an iterator over all bits in this range as `bool`s.
     #[inline]
     pub fn iter(&self) -> BitRangeIter {
         BitRangeIter {
@@ -72,16 +131,21 @@ impl BitRange {
         }
     }
 
+    /// Counts the number of bits set to 1 in the entire range.
     #[inline]
     pub fn count_ones(&self) -> u32 {
         self.block_iter().fold(0, |c, bits| c + bits.count_ones())
     }
 
+    /// Counts the number of bits set to 0 in the entire range.
     #[inline]
     pub fn count_zeros(&self) -> u32 {
         self.block_iter().fold(0, |c, bits| c + bits.count_zeros())
     }
 
+    /// Computes the dot product (mod 2) of two [`BitRange`]s.
+    ///
+    /// Returns `true` if the number of matching 1s is odd, otherwise `false`.
     #[inline]
     pub fn dot(&self, rhs: &BitRange) -> bool {
         let mut c = 0;
@@ -92,6 +156,11 @@ impl BitRange {
         c == 1
     }
 
+    /// Returns the value of the bit at the specified index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of range.
     #[inline]
     pub fn bit(&self, index: usize) -> bool {
         let block_index = index / BLOCKSIZE;
@@ -100,6 +169,16 @@ impl BitRange {
         block & MSB_ON == MSB_ON
     }
 
+    /// Sets the bit at the given index to the provided value.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - Bit index to set.
+    /// * `value` - `true` to set to 1, `false` to set to 0.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of range.
     #[inline]
     pub fn set_bit(&mut self, index: usize, value: bool) {
         let block_index = index / BLOCKSIZE;
@@ -113,6 +192,16 @@ impl BitRange {
         self.0[block_index] = block.rotate_right(bit_index);
     }
 
+    /// Returns the position (in bits) of the first 1-bit in the specified range of [`BitBlock`]s.
+    ///
+    /// # Arguments
+    ///
+    /// * `from` - Starting block index.
+    /// * `to` - Ending block index (exclusive).
+    ///
+    /// # Returns
+    ///
+    /// `Some(bit_index)` if a 1-bit is found, otherwise `None`.
     pub fn first_one_in_range(&self, from: usize, to: usize) -> Option<usize> {
         for i in from..to {
             if self.0[i] != 0 {
@@ -190,9 +279,6 @@ impl IndexMut<Range<usize>> for BitRange {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct BitVec(Vec<BitBlock>);
-
 impl BitVec {
     #[inline]
     pub fn bit_range(&self, from_block: usize, to_block: usize) -> &BitRange {
@@ -238,15 +324,6 @@ impl BitAndAssign<&Self> for BitRange {
     }
 }
 
-// impl BitAndAssign<&BitRange> for BitVec {
-//     #[inline]
-//     fn bitand_assign(&mut self, rhs: &BitRange) {
-//         for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
-//             *bits0 &= bits1;
-//         }
-//     }
-// }
-
 impl BitXorAssign<&Self> for BitRange {
     #[inline]
     fn bitxor_assign(&mut self, rhs: &BitRange) {
@@ -255,15 +332,6 @@ impl BitXorAssign<&Self> for BitRange {
         }
     }
 }
-
-// impl BitXorAssign<&BitRange> for BitVec {
-//     #[inline]
-//     fn bitxor_assign(&mut self, rhs: &BitRange) {
-//         for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
-//             *bits0 ^= bits1;
-//         }
-//     }
-// }
 
 impl From<Vec<BitBlock>> for BitVec {
     fn from(value: Vec<BitBlock>) -> Self {
