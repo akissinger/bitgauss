@@ -7,12 +7,28 @@ use std::{
     ops::{Index, Mul},
 };
 
+/// A matrix of bits, represented as a vector of blocks of bits
+///
+/// The matrix is stored in row-major order, with each row represented as a `BitRange` of `BitBlock`s. If
+/// the number of columns is not a multiple of `BLOCKSIZE`, the last block in each row will be padded with 0s.
+///
+/// The matrix is additionally allowed to be padded arbitrarily in either dimension, e.g. to make it square. In
+/// that case, extra bits beyond `rows` and `cols` should always be 0.
+///
+/// The logical rows and columns of the matrix are given by `rows` and `cols`, while the full padded number of
+/// rows is given by `data.len() / col_blocks` and the padded number of columns is `col_blocks * BLOCKSIZE`.
 #[derive(Clone, Debug)]
 pub struct BitMatrix {
+    /// the number of logical rows in the matrix
     rows: usize,
+
+    /// the number of logical columns in the matrix
     cols: usize,
-    row_blocks: usize,
+
+    /// the number of [`BitBlock`]s used to store each row, i.e. actual 2D matrix has `col_blocks * BLOCKSIZE` many columns
     col_blocks: usize,
+
+    /// a [`BitVec`] containing the data of the matrix, stored in row-major order
     data: BitVec,
 }
 
@@ -33,28 +49,24 @@ impl BitMatrix {
     }
 
     pub fn build(rows: usize, cols: usize, mut f: impl FnMut(usize, usize) -> bool) -> Self {
-        let row_blocks = min_blocks(rows);
         let col_blocks = min_blocks(cols);
-        let data = (0..BLOCKSIZE * row_blocks)
+        let data = (0..rows)
             .flat_map(|i| (0..BLOCKSIZE * col_blocks).map(move |j| (i, j)))
             .map(|(i, j)| if i < rows && j < cols { f(i, j) } else { false })
             .collect();
         BitMatrix {
             rows,
             cols,
-            row_blocks,
             col_blocks,
             data,
         }
     }
 
     pub fn zeros(rows: usize, cols: usize) -> Self {
-        let row_blocks = min_blocks(rows);
         let col_blocks = min_blocks(cols);
         BitMatrix {
             rows,
             cols,
-            row_blocks,
             col_blocks,
             data: BitVec::zeros(rows * col_blocks),
         }
@@ -78,7 +90,6 @@ impl BitMatrix {
         BitMatrix {
             rows: size,
             cols: size,
-            row_blocks: blocks,
             col_blocks: blocks,
             data,
         }
@@ -86,7 +97,6 @@ impl BitMatrix {
 
     #[inline]
     pub fn random(rng: &mut impl Rng, rows: usize, cols: usize) -> Self {
-        let row_blocks = min_blocks(rows);
         let col_blocks = min_blocks(cols);
         let num_blocks = BLOCKSIZE * rows * col_blocks;
         let mask = BitBlock::MAX.wrapping_shl((BLOCKSIZE - (cols % BLOCKSIZE)) as u32);
@@ -102,7 +112,6 @@ impl BitMatrix {
         BitMatrix {
             rows,
             cols,
-            row_blocks,
             col_blocks,
             data,
         }
@@ -151,8 +160,10 @@ impl BitMatrix {
 
     #[inline]
     pub fn pad_to_square(&mut self) {
-        if self.row_blocks != self.col_blocks {
-            let blocks = usize::max(self.row_blocks, self.col_blocks);
+        let data_rows = self.data.len() / self.col_blocks;
+        let row_blocks = min_blocks(data_rows);
+        if data_rows != row_blocks * BLOCKSIZE || row_blocks != self.col_blocks {
+            let blocks = usize::max(row_blocks, self.col_blocks);
             let mut data = Vec::with_capacity(BLOCKSIZE * blocks * blocks);
             for i in 0..(BLOCKSIZE * blocks) {
                 for j in 0..blocks {
@@ -165,7 +176,6 @@ impl BitMatrix {
             }
 
             self.data = data.into();
-            self.row_blocks = blocks;
             self.col_blocks = blocks;
         }
     }
@@ -177,7 +187,7 @@ impl BitMatrix {
     /// padded to be square).
     fn transpose_helper(&mut self, source: Option<&BitMatrix>) {
         let mut buffer: [BitBlock; BLOCKSIZE] = [0; BLOCKSIZE];
-        for i in 0..self.row_blocks {
+        for i in 0..min_blocks(self.rows) {
             for j in 0..self.col_blocks {
                 let dest_block = BLOCKSIZE * i * self.col_blocks + j;
                 let source_block;
