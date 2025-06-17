@@ -211,27 +211,32 @@ impl BitRange {
         None
     }
 
+    /// Performs an XOR operation between source and target ranges.
     pub fn xor_range(&mut self, source: usize, target: usize, len: usize) {
         for i in 0..len {
             self.0[target + i] ^= self.0[source + i];
         }
     }
 
+    /// Extracts a subrange of bit blocks into a new [`BitVec`].
     pub fn extract(&self, start: usize, len: usize) -> BitVec {
         BitVec(self.0[start..(start + len)].into())
     }
 
+    /// XORs another [`BitRange`] into self, starting at a given target position.
     pub fn xor_in(&mut self, source: &BitRange, target_pos: usize) {
         for i in 0..source.len() {
             self.0[target_pos + i] ^= source.0[i];
         }
     }
 
+    /// Swaps two bit blocks at given indices.
     #[inline]
     pub fn swap(&mut self, source: usize, target: usize) {
         self.0.swap(source, target);
     }
 
+    /// Swaps ranges of bit blocks.
     #[inline]
     pub fn swap_range(&mut self, source: usize, target: usize, len: usize) {
         for i in 0..len {
@@ -239,11 +244,13 @@ impl BitRange {
         }
     }
 
+    /// Returns the number of [`BitBlock`]s in the range.
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Returns the total number of bits in the range.
     #[inline]
     pub fn num_bits(&self) -> usize {
         self.0.len() * BLOCKSIZE
