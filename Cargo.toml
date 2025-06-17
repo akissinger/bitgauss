@@ -1,0 +1,18 @@
+[package]
+name = "bitgauss"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wide = "0.7.32"
+num = "0.4.3"
+rayon = "1.10.0"
+rand = { version = "0.9.1", features = ["small_rng"] }
+ref-cast = "1.0.24"
+
+[dev-dependencies]
+criterion = { version = "0.6.0", features = ["html_reports"] }
+
+[[bench]]
+name = "matrix_ops"
+harness = false
