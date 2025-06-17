@@ -10,7 +10,7 @@ use std::{
 /// A matrix of bits, represented as a vector of blocks of bits
 ///
 /// The matrix is stored in row-major order, with each row represented as a `BitRange` of `BitBlock`s. If
-/// the number of columns is not a multiple of `BLOCKSIZE`, the last block in each row will be padded with 0s.
+/// the number of columns is not a multiple of [`BLOCKSIZE`], the last block in each row will be padded with 0s.
 ///
 /// The matrix is additionally allowed to be padded arbitrarily in either dimension, e.g. to make it square. In
 /// that case, extra bits beyond `rows` and `cols` should always be 0.
@@ -32,22 +32,26 @@ pub struct BitMatrix {
     data: BitVec,
 }
 
+/// A trait for types that can have row operations performed on them
 pub trait RowOps {
     fn add_row(&mut self, from: usize, to: usize);
     fn swap_rows(&mut self, from: usize, to: usize);
 }
 
 impl BitMatrix {
+    /// Gets the bit at position `(i, j)`
     #[inline]
     pub fn bit(&self, i: usize, j: usize) -> bool {
         self.data.bit(self.col_blocks * BLOCKSIZE * i + j)
     }
 
+    /// Sets the bit at position `(i, j)` to `b`
     #[inline]
     pub fn set_bit(&mut self, i: usize, j: usize, b: bool) {
         self.data.set_bit(self.col_blocks * BLOCKSIZE * i + j, b);
     }
 
+    /// Builds a `BitMatrix` from a function `f` that determines the value of each bit
     pub fn build(rows: usize, cols: usize, mut f: impl FnMut(usize, usize) -> bool) -> Self {
         let col_blocks = min_blocks(cols);
         let data = (0..rows)
@@ -62,6 +66,7 @@ impl BitMatrix {
         }
     }
 
+    /// Creates a new `BitMatrix` of size `rows` x `cols` with all bits set to 0
     pub fn zeros(rows: usize, cols: usize) -> Self {
         let col_blocks = min_blocks(cols);
         BitMatrix {
@@ -72,6 +77,7 @@ impl BitMatrix {
         }
     }
 
+    /// Creates a new identity `BitMatrix` of size `size` x `size`
     pub fn identity(size: usize) -> Self {
         let blocks = min_blocks(size);
         let num_blocks = size * blocks;
@@ -95,6 +101,9 @@ impl BitMatrix {
         }
     }
 
+    /// Creates a new random `BitMatrix` of size `rows` x `cols`
+    ///
+    /// Bits outside of the logical size of the matrix (i.e. `rows` and `cols`) will be masked to 0.
     #[inline]
     pub fn random(rng: &mut impl Rng, rows: usize, cols: usize) -> Self {
         let col_blocks = min_blocks(cols);
@@ -117,6 +126,7 @@ impl BitMatrix {
         }
     }
 
+    /// Creates a new random invertible `BitMatrix` of size `size` x `size`
     #[inline]
     pub fn random_invertible(rng: &mut impl Rng, size: usize) -> Self {
         let mut m = BitMatrix::identity(size);
@@ -133,31 +143,37 @@ impl BitMatrix {
         m
     }
 
+    /// Returns the number of logical rows in the matrix
     #[inline]
     pub fn rows(&self) -> usize {
         self.rows
     }
 
+    /// Returns the number of logical columns in the matrix
     #[inline]
     pub fn cols(&self) -> usize {
         self.cols
     }
 
+    /// Adds (XORs) the bits from a `BitRange` to a specified row
     #[inline]
     pub fn add_bits_to_row(&mut self, bits: &BitRange, row: usize) {
         self.data.xor_in(bits, row * self.col_blocks);
     }
 
+    /// Returns an immutable reference to a row of the matrix as a `BitRange`
     #[inline]
     pub fn row(&self, row: usize) -> &BitRange {
         &self.data[row * self.col_blocks..(row + 1) * self.col_blocks]
     }
 
+    /// Returns a mutable reference to a row of the matrix as a `BitRange`
     #[inline]
     pub fn row_mut(&mut self, row: usize) -> &mut BitRange {
         &mut self.data[row * self.col_blocks..(row + 1) * self.col_blocks]
     }
 
+    /// Pads the matrix with zero-rows and zero-columns to make it square
     #[inline]
     pub fn pad_to_square(&mut self) {
         let data_rows = self.data.len() / self.col_blocks;
@@ -182,7 +198,7 @@ impl BitMatrix {
 
     /// Main working function for transposition
     ///
-    /// If `source` is given as `Some(bit_matrix)``, then copy bits from `bit_matrix` in transposed
+    /// If `source` is given as `Some(bit_matrix)`, then copy bits from `bit_matrix` in transposed
     /// position. Otherwise if it is `None` then transpose in place (assuming the matrix is already
     /// padded to be square).
     fn transpose_helper(&mut self, source: Option<&BitMatrix>) {
@@ -254,15 +270,15 @@ impl BitMatrix {
         dest
     }
 
-    /// Transpose the matrix in place, padding allocated memory with 0s if necessary
+    /// Transposes the matrix in place, padding allocated memory with 0s if necessary
     #[inline]
     pub fn transpose_inplace(&mut self) {
         self.pad_to_square();
         self.transpose_helper(None);
     }
 
-    /// Perform gaussian elimination while also performing matching row operations on `proxy`
-    /// and returning a vector of pivot columns
+    /// Performs gaussian elimination while also performing matching row operations on `proxy`
+    /// and returns a vector of pivot columns.
     fn gauss_helper(&mut self, full: bool, proxy: &mut impl RowOps) -> Vec<usize> {
         let mut row = 0;
         let mut pcol = 0;
@@ -318,22 +334,22 @@ impl BitMatrix {
         pcols
     }
 
-    /// Perform gaussian elimination
+    /// Performs gaussian elimination
     ///
     /// If `full` is true, then perform full Gauss-Jordan to produce reduced echelon form, otherwise
-    /// just return echelon form
+    /// just returns echelon form.
     #[inline]
     pub fn gauss(&mut self, full: bool) {
         self.gauss_helper(full, &mut ());
     }
 
-    /// Compute the rank of the matrix using gaussian elimination
+    /// Computes the rank of the matrix using gaussian elimination
     #[inline]
     pub fn rank(&self) -> usize {
         self.clone().gauss_helper(false, &mut ()).len()
     }
 
-    /// Compute the inverse of an invertible matrix
+    /// Computes the inverse of an invertible matrix
     pub fn inverse(&self) -> Self {
         if self.rows() != self.cols() {
             panic!("Matrix must be square");
@@ -374,6 +390,7 @@ impl PartialEq for BitMatrix {
 
 impl Eq for BitMatrix {}
 
+/// A no-op implementation of `RowOps` for when we don't need to track row operations
 impl RowOps for () {
     #[inline]
     fn add_row(&mut self, _: usize, _: usize) {}
@@ -382,6 +399,7 @@ impl RowOps for () {
     fn swap_rows(&mut self, _: usize, _: usize) {}
 }
 
+/// An implementation of `RowOps` for `BitMatrix` that allows performing row operations on the matrix
 impl RowOps for BitMatrix {
     #[inline]
     fn add_row(&mut self, from: usize, to: usize) {
@@ -402,6 +420,10 @@ impl RowOps for BitMatrix {
     }
 }
 
+/// Allows indexing into the matrix to return the bit at `(row, col)
+///
+/// `matrix[(row, col)]` is equivalent to `matrix.bit(row, col)`. Note this differs from how indexing works for [`BitVec`], which indexes
+/// over [`BitBlock`]s, not individual bits.
 impl Index<(usize, usize)> for BitMatrix {
     type Output = bool;
 
@@ -415,7 +437,11 @@ impl Index<(usize, usize)> for BitMatrix {
     }
 }
 
+/// Formats the matrix for display
+///
+/// Padding bits are not shown, only the logical size of the matrix is displayed.
 impl fmt::Display for BitMatrix {
+    /// Formats the matrix for display.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for i in 0..self.rows {
             for j in 0..self.cols {
@@ -430,6 +456,7 @@ impl fmt::Display for BitMatrix {
 
 impl Mul for &BitMatrix {
     type Output = BitMatrix;
+    /// Multiplies two matrices.
     fn mul(self, rhs: Self) -> Self::Output {
         if self.cols != rhs.rows {
             panic!(
