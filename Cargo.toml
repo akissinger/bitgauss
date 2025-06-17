@@ -1,9 +1,16 @@
 [package]
 name = "bitgauss"
 version = "0.1.0"
-edition = "2024"
+authors = ["Aleks Kissinger <aleks0@gmail.com>"]
+keywords = ["linear algebra", "matrix", "bitwise"]
+categories = ["science"]
 homepage = "https://github.com/akissinger/bitgauss"
 repository = "https://github.com/akissinger/bitgauss"
+
+edition = "2021"
+rust-version = "1.81"
+license = "Apache-2.0"
+license-file = "LICENSE"
 
 [dependencies]
 rand = { version = "0.9.1", features = ["small_rng"] }
