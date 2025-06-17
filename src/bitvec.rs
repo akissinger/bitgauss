@@ -287,26 +287,97 @@ impl IndexMut<Range<usize>> for BitRange {
 }
 
 impl BitVec {
+    /// Returns the number of [`BitBlock`]s in the vector.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns the total number of bits in the vector.
+    #[inline]
+    pub fn num_bits(&self) -> usize {
+        self.0.len() * BLOCKSIZE
+    }
+
+    /// Returns true if the vector contains no blocks.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns the value of the bit at the specified index.
+    #[inline]
+    pub fn bit(&self, index: usize) -> bool {
+        self.deref().bit(index)
+    }
+
+    /// Sets the bit at the given index to the provided value.
+    #[inline]
+    pub fn set_bit(&mut self, index: usize, value: bool) {
+        self.deref_mut().set_bit(index, value)
+    }
+
+    /// Returns an iterator over all bits in this vector as `bool`s.
+    #[inline]
+    pub fn iter(&self) -> BitRangeIter {
+        self.deref().iter()
+    }
+
+    /// Counts the number of bits set to 1 in the entire vector.
+    #[inline]
+    pub fn count_ones(&self) -> u32 {
+        self.deref().count_ones()
+    }
+
+    /// Counts the number of bits set to 0 in the entire vector.
+    #[inline]
+    pub fn count_zeros(&self) -> u32 {
+        self.deref().count_zeros()
+    }
+
+    /// Returns a [`BitRange`] that represents a subrange of the vector.
+    ///
+    /// # Arguments
+    /// * `from_block` - Starting block index (inclusive).
+    /// * `to_block` - Ending block index (exclusive).
     #[inline]
     pub fn bit_range(&self, from_block: usize, to_block: usize) -> &BitRange {
         BitRange::ref_cast(&self.0[from_block..to_block])
     }
 
+    /// Returns a mutable [`BitRange`] that represents a subrange of the vector.
+    ///
+    /// # Arguments
+    /// * `from_block` - Starting block index (inclusive).
+    /// * `to_block` - Ending block index (exclusive).
     #[inline]
     pub fn bit_range_mut(&mut self, from_block: usize, to_block: usize) -> &mut BitRange {
         BitRange::ref_cast_mut(&mut self.0[from_block..to_block])
     }
 
+    /// Constructs a random [`BitVec`] with the specified number of [`BitBlock`]s.
+    ///
+    /// # Arguments
+    /// * `rng` - A mutable reference to a random number generator.
+    /// * `num_blocks` - The block size of the generated bit vector.
     #[inline]
     pub fn random(rng: &mut impl Rng, num_blocks: usize) -> Self {
         (0..num_blocks).map(|_| rng.random::<BitBlock>()).collect()
     }
 
+    /// Constructs a [`BitVec`] with all bits set to zero.
+    ///
+    /// # Arguments
+    /// * `num_blocks` - The block size of the new bit vector.
     #[inline]
     pub fn zeros(num_blocks: usize) -> Self {
         BitVec(vec![0; num_blocks])
     }
 
+    /// Constructs a [`BitVec`] with all bits set to one.
+    ///
+    /// # Arguments
+    /// * `num_blocks` - The block size of the new bit vector.
     #[inline]
     pub fn ones(num_blocks: usize) -> Self {
         BitVec(vec![BitBlock::MAX; num_blocks])
