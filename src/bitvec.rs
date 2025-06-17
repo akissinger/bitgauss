@@ -78,11 +78,13 @@ impl<'a> Iterator for BitRangeIter<'a> {
             self.c = 0;
         }
         let bit = self.block & MSB_ON == MSB_ON;
-        self.block <<= 1;
+        self.block = self.block.wrapping_shl(1);
         self.c += 1;
         Some(bit)
     }
 }
+
+pub type BitBlockIter<'a> = std::iter::Copied<std::slice::Iter<'a, BitBlock>>;
 
 impl BitRange {
     /// Returns a copy of the range as a [`BitVec`].
@@ -93,7 +95,7 @@ impl BitRange {
 
     /// Returns an iterator over the [`BitBlock`]s in this range.
     #[inline]
-    pub fn block_iter(&self) -> impl Iterator<Item = BitBlock> {
+    pub fn block_iter(&self) -> BitBlockIter<'_> {
         self.0.iter().copied()
     }
 
@@ -230,6 +232,12 @@ impl BitRange {
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    /// Returns true if the range contains no blocks.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     /// Returns the total number of bits in the range.
@@ -467,7 +475,7 @@ impl From<BitVec> for Vec<bool> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::{SeedableRng, rngs::SmallRng};
+    use rand::{rngs::SmallRng, SeedableRng};
 
     #[test]
     fn bit_xor_and() {

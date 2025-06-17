@@ -387,7 +387,7 @@ impl PartialEq for BitMatrix {
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -450,7 +450,7 @@ impl fmt::Display for BitMatrix {
             for j in 0..self.cols {
                 write!(f, " {} ", if self[(i, j)] { 1 } else { 0 })?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
 
         Ok(())
@@ -485,7 +485,7 @@ impl Mul for &BitMatrix {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::{SeedableRng, rngs::SmallRng};
+    use rand::{rngs::SmallRng, SeedableRng};
 
     #[test]
     fn random_gauss() {

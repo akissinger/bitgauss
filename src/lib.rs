@@ -11,5 +11,6 @@
 //! - [`crate::bitmatrix::BitMatrix`]: a two-dimensional matrix based on `BitVec`, which implements
 //!   basic linear algebraic operations
 
+#[allow(clippy::needless_range_loop, clippy::suspicious_arithmetic_impl)]
 pub mod bitmatrix;
 pub mod bitvec;
