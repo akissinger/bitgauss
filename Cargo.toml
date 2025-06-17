@@ -2,6 +2,8 @@
 name = "bitgauss"
 version = "0.1.0"
 edition = "2024"
+homepage = "https://github.com/akissinger/bitgauss"
+repository = "https://github.com/akissinger/bitgauss"
 
 [dependencies]
 wide = "0.7.32"
