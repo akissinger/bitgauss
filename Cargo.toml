@@ -6,9 +6,6 @@ homepage = "https://github.com/akissinger/bitgauss"
 repository = "https://github.com/akissinger/bitgauss"
 
 [dependencies]
-wide = "0.7.32"
-num = "0.4.3"
-rayon = "1.10.0"
 rand = { version = "0.9.1", features = ["small_rng"] }
 ref-cast = "1.0.24"
 

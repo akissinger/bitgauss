@@ -1,5 +1,3 @@
-pub mod parallel;
-
 use crate::bitvec::*;
 use rand::Rng;
 use std::{
@@ -52,6 +50,11 @@ impl BitMatrix {
     }
 
     /// Builds a `BitMatrix` from a function `f` that determines the value of each bit
+    ///
+    /// # Arguments
+    /// * `rows` - the number of rows in the matrix
+    /// * `cols` - the number of columns in the matrix
+    /// * `f` - a function that takes the row and column indices and returns a boolean value for each bit
     pub fn build(rows: usize, cols: usize, mut f: impl FnMut(usize, usize) -> bool) -> Self {
         let col_blocks = min_blocks(cols);
         let data = (0..rows)

@@ -1,4 +1,3 @@
-use bitgauss::bitmatrix::parallel::*;
 use bitgauss::{bitmatrix::BitMatrix, bitvec::*};
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use rand::{Rng, SeedableRng, rngs::SmallRng};
@@ -67,14 +66,6 @@ fn big_gauss(c: &mut Criterion) {
 
     group.bench_function("big_gauss_full", |b| {
         b.iter_batched_ref(|| m.clone(), |m| m.gauss(true), BatchSize::LargeInput)
-    });
-
-    group.bench_function("big_gauss_par_utri", |b| {
-        b.iter_batched_ref(|| m.clone(), |m| m.par_gauss(false), BatchSize::LargeInput)
-    });
-
-    group.bench_function("big_gauss_par_full", |b| {
-        b.iter_batched_ref(|| m.clone(), |m| m.par_gauss(true), BatchSize::LargeInput)
     });
 }
 

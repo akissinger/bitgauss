@@ -1,5 +1,4 @@
 use rand::Rng;
-use rayon::prelude::*;
 use ref_cast::RefCast;
 use std::fmt;
 pub use std::ops::{BitAndAssign, BitXorAssign, Deref, DerefMut, Index, IndexMut, Range};
@@ -90,23 +89,6 @@ impl BitRange {
     #[inline]
     pub fn to_vec(&self) -> BitVec {
         self.0.to_vec().into()
-    }
-
-    /// Divides the range into mutable parallel chunks of the given size.
-    ///
-    /// Useful for parallel processing over disjoint bit regions.
-    ///
-    /// # Arguments
-    ///
-    /// * `chunk_size` - Number of blocks per chunk.
-    #[inline]
-    pub fn par_chunks_mut(
-        &mut self,
-        chunk_size: usize,
-    ) -> impl ParallelIterator<Item = &mut BitRange> {
-        self.0
-            .par_chunks_mut(chunk_size)
-            .map(|x| BitRange::ref_cast_mut(x))
     }
 
     /// Returns an iterator over the [`BitBlock`]s in this range.
