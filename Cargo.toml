@@ -1,5 +1,6 @@
 [package]
 name = "bitgauss"
+description = "Fast boolean linear algebra library"
 version = "0.1.0"
 authors = ["Aleks Kissinger <aleks0@gmail.com>"]
 keywords = ["linear algebra", "matrix", "bitwise"]
