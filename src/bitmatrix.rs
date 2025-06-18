@@ -393,7 +393,7 @@ impl BitMatrix {
         BitMatrix {
             rows,
             cols: self.cols(),
-            col_blocks: col_blocks,
+            col_blocks,
             data,
         }
     }

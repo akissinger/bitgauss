@@ -405,9 +405,9 @@ impl BitVec {
         for bits in other.0.iter() {
             let left_part = bits.wrapping_shr((BLOCKSIZE - shift) as u32);
             let right_part = bits.wrapping_shl(shift as u32);
-            self.0.last_mut().map(|last| {
+            if let Some(last) = self.0.last_mut() {
                 *last |= left_part;
-            });
+            }
             self.0.push(right_part);
         }
     }
