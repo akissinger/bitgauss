@@ -2,6 +2,7 @@
 //! - getting and setting individual matrix elements (as `bool`s)
 //! - fast row operations and dot product using bitwise operations
 //! - fast in-place and out-of-place matrix transpose using a [recursive block method](https://github.com/dsnet/matrix-transpose)
+//! - horizontal and vertical concatenation of matrices
 //! - matrix multiplication
 //! - Gaussian elimination and related methods (e.g. rank and inverse)
 //!
