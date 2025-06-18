@@ -6,11 +6,14 @@
 //! - Gaussian elimination and related methods (e.g. rank and inverse)
 //!
 //! The two main data structures provided by this crate are:
-//! - [`crate::bitvec::BitVec`]: a vector of bits stored in 64-bit chunks, along with convenience
+//! - [`BitVec`]: a vector of bits stored in 64-bit chunks, along with convenience
 //!   methods for indexing, slicing, and manipulating bits
-//! - [`crate::bitmatrix::BitMatrix`]: a two-dimensional matrix based on `BitVec`, which implements
+//! - [`BitMatrix`]: a two-dimensional matrix based on `BitVec`, which implements
 //!   basic linear algebraic operations
 
 #[allow(clippy::needless_range_loop, clippy::suspicious_arithmetic_impl)]
 pub mod bitmatrix;
 pub mod bitvec;
+
+pub use bitmatrix::{BitMatrix, RowOps};
+pub use bitvec::{BitBlock, BitRange, BitVec};
