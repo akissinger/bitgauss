@@ -160,19 +160,19 @@ impl BitMatrix {
 
     /// Adds (XORs) the bits from a `BitRange` to a specified row
     #[inline]
-    pub fn add_bits_to_row(&mut self, bits: &BitRange, row: usize) {
+    pub fn add_bits_to_row(&mut self, bits: &BitSlice, row: usize) {
         self.data.xor_in(bits, row * self.col_blocks);
     }
 
     /// Returns an immutable reference to a row of the matrix as a `BitRange`
     #[inline]
-    pub fn row(&self, row: usize) -> &BitRange {
+    pub fn row(&self, row: usize) -> &BitSlice {
         &self.data[row * self.col_blocks..(row + 1) * self.col_blocks]
     }
 
     /// Returns a mutable reference to a row of the matrix as a `BitRange`
     #[inline]
-    pub fn row_mut(&mut self, row: usize) -> &mut BitRange {
+    pub fn row_mut(&mut self, row: usize) -> &mut BitSlice {
         &mut self.data[row * self.col_blocks..(row + 1) * self.col_blocks]
     }
 
@@ -365,6 +365,36 @@ impl BitMatrix {
         }
 
         inv
+    }
+
+    /// Vertically stacks this matrix with another one and returns the result
+    ///
+    /// The resulting matrix will have the minimal column padding.
+    pub fn vstack(&self, other: &Self) -> Self {
+        if self.cols() != other.cols() {
+            panic!("Cannot vertically stack matrices with different number of columns");
+        }
+
+        let rows = self.rows() + other.rows();
+        let mut data = BitVec::with_capacity(rows * self.col_blocks);
+        let col_blocks = min_blocks(self.cols());
+
+        for i in 0..self.rows() {
+            let start = i * self.col_blocks;
+            data.extend_from_slice(&self.data[start..start + col_blocks]);
+        }
+
+        for i in 0..other.rows() {
+            let start = i * other.col_blocks;
+            data.extend_from_slice(&other.data[start..start + col_blocks]);
+        }
+
+        BitMatrix {
+            rows,
+            cols: self.cols(),
+            col_blocks: col_blocks,
+            data,
+        }
     }
 }
 
@@ -603,5 +633,37 @@ mod test {
 
         assert_eq!(&m * &n, id);
         assert_eq!(&n * &m, id);
+    }
+
+    // test that two matrices with different padding but same logical size are equal
+    #[test]
+    fn matrix_eq_padding() {
+        let mut rng = SmallRng::seed_from_u64(1);
+        let m1 = BitMatrix::random(&mut rng, 10, 20);
+        let mut m2 = m1.clone();
+        m2.pad_to_square();
+        assert_eq!(m1, m2);
+    }
+
+    // test BitMatrix::vstack
+    #[test]
+    fn matrix_vstack() {
+        let mut rng = SmallRng::seed_from_u64(1);
+        let m1 = BitMatrix::random(&mut rng, 10, 20);
+        let m2 = BitMatrix::random(&mut rng, 5, 20);
+        let m3 = m1.vstack(&m2);
+
+        assert_eq!(m3.rows(), m1.rows() + m2.rows());
+        assert_eq!(m3.cols(), m1.cols());
+        for i in 0..m1.rows() {
+            for j in 0..m1.cols() {
+                assert_eq!(m3[(i, j)], m1[(i, j)]);
+            }
+        }
+        for i in 0..m2.rows() {
+            for j in 0..m2.cols() {
+                assert_eq!(m3[(i + m1.rows(), j)], m2[(i, j)]);
+            }
+        }
     }
 }

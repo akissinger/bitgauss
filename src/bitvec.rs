@@ -40,7 +40,7 @@ pub fn min_blocks(bits: usize) -> usize {
 /// # Examples
 ///
 /// ```
-/// use bitgauss::bitvec::*;
+/// use bitgauss::BitVec;
 ///
 /// // Create a BitVec of 256 bits, all set to zero
 /// let mut bv = BitVec::zeros(4);
@@ -50,7 +50,7 @@ pub fn min_blocks(bits: usize) -> usize {
 ///
 /// # Note
 ///
-/// Many methods are implemented via dereferencing to [`BitRange`], which provides
+/// Many methods are implemented via dereferencing to [`BitSlice`], which provides
 /// additional bitwise and range operations.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct BitVec(Vec<BitBlock>);
@@ -60,17 +60,17 @@ pub struct BitVec(Vec<BitBlock>);
 /// Provides methods for bitwise operations, iteration, and bit access within the range.
 #[derive(RefCast, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(transparent)]
-pub struct BitRange([BitBlock]);
+pub struct BitSlice([BitBlock]);
 
-/// Iterator over the bits in a [`BitRange`].
+/// Iterator over the bits in a [`BitSlice`].
 ///
 /// Yields each bit as a `bool`, starting from the most significant bit of the first block.
-pub struct BitRangeIter<'a> {
+pub struct BitIter<'a> {
     inner: std::slice::Iter<'a, BitBlock>,
     c: usize,
     block: BitBlock,
 }
-impl<'a> Iterator for BitRangeIter<'a> {
+impl<'a> Iterator for BitIter<'a> {
     type Item = bool;
     fn next(&mut self) -> Option<Self::Item> {
         if self.c == BLOCKSIZE {
@@ -86,7 +86,7 @@ impl<'a> Iterator for BitRangeIter<'a> {
 
 pub type BitBlockIter<'a> = std::iter::Copied<std::slice::Iter<'a, BitBlock>>;
 
-impl BitRange {
+impl BitSlice {
     /// Returns a copy of the range as a [`BitVec`].
     #[inline]
     pub fn to_vec(&self) -> BitVec {
@@ -107,8 +107,8 @@ impl BitRange {
 
     /// Returns an iterator over all bits in this range as `bool`s.
     #[inline]
-    pub fn iter(&self) -> BitRangeIter {
-        BitRangeIter {
+    pub fn iter(&self) -> BitIter {
+        BitIter {
             inner: self.0.iter(),
             c: BLOCKSIZE,
             block: 0,
@@ -127,11 +127,11 @@ impl BitRange {
         self.block_iter().fold(0, |c, bits| c + bits.count_zeros())
     }
 
-    /// Computes the dot product (mod 2) of two [`BitRange`]s.
+    /// Computes the dot product (mod 2) of two [`BitSlice`]s.
     ///
     /// Returns `true` if the number of matching 1s is odd, otherwise `false`.
     #[inline]
-    pub fn dot(&self, rhs: &BitRange) -> bool {
+    pub fn dot(&self, rhs: &BitSlice) -> bool {
         let mut c = 0;
         for (bits0, bits1) in self.0.iter().zip(rhs.0.iter()) {
             c ^= (*bits0 & *bits1).count_ones() & 1;
@@ -207,8 +207,8 @@ impl BitRange {
         BitVec(self.0[start..(start + len)].into())
     }
 
-    /// XORs another [`BitRange`] into self, starting at a given target position.
-    pub fn xor_in(&mut self, source: &BitRange, target_pos: usize) {
+    /// XORs another [`BitSlice`] into self, starting at a given target position.
+    pub fn xor_in(&mut self, source: &BitSlice, target_pos: usize) {
         for i in 0..source.len() {
             self.0[target_pos + i] ^= source.0[i];
         }
@@ -247,14 +247,14 @@ impl BitRange {
     }
 }
 
-impl Index<Range<usize>> for BitRange {
-    type Output = BitRange;
+impl Index<Range<usize>> for BitSlice {
+    type Output = BitSlice;
     fn index(&self, index: Range<usize>) -> &Self::Output {
-        BitRange::ref_cast(&self.0[index])
+        BitSlice::ref_cast(&self.0[index])
     }
 }
 
-impl Index<usize> for BitRange {
+impl Index<usize> for BitSlice {
     type Output = BitBlock;
 
     #[inline]
@@ -263,16 +263,16 @@ impl Index<usize> for BitRange {
     }
 }
 
-impl IndexMut<usize> for BitRange {
+impl IndexMut<usize> for BitSlice {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.0.index_mut(index)
     }
 }
 
-impl IndexMut<Range<usize>> for BitRange {
+impl IndexMut<Range<usize>> for BitSlice {
     fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
-        BitRange::ref_cast_mut(self.0.index_mut(index))
+        BitSlice::ref_cast_mut(self.0.index_mut(index))
     }
 }
 
@@ -309,7 +309,7 @@ impl BitVec {
 
     /// Returns an iterator over all bits in this vector as `bool`s.
     #[inline]
-    pub fn iter(&self) -> BitRangeIter {
+    pub fn iter(&self) -> BitIter {
         self.deref().iter()
     }
 
@@ -325,24 +325,24 @@ impl BitVec {
         self.deref().count_zeros()
     }
 
-    /// Returns a [`BitRange`] that represents a subrange of the vector.
+    /// Returns a [`BitSlice`] that represents a subrange of the vector.
     ///
     /// # Arguments
     /// * `from_block` - Starting block index (inclusive).
     /// * `to_block` - Ending block index (exclusive).
     #[inline]
-    pub fn bit_range(&self, from_block: usize, to_block: usize) -> &BitRange {
-        BitRange::ref_cast(&self.0[from_block..to_block])
+    pub fn bit_range(&self, from_block: usize, to_block: usize) -> &BitSlice {
+        BitSlice::ref_cast(&self.0[from_block..to_block])
     }
 
-    /// Returns a mutable [`BitRange`] that represents a subrange of the vector.
+    /// Returns a mutable [`BitSlice`] that represents a subrange of the vector.
     ///
     /// # Arguments
     /// * `from_block` - Starting block index (inclusive).
     /// * `to_block` - Ending block index (exclusive).
     #[inline]
-    pub fn bit_range_mut(&mut self, from_block: usize, to_block: usize) -> &mut BitRange {
-        BitRange::ref_cast_mut(&mut self.0[from_block..to_block])
+    pub fn bit_range_mut(&mut self, from_block: usize, to_block: usize) -> &mut BitSlice {
+        BitSlice::ref_cast_mut(&mut self.0[from_block..to_block])
     }
 
     /// Constructs a random [`BitVec`] with the specified number of [`BitBlock`]s.
@@ -372,6 +372,16 @@ impl BitVec {
     pub fn ones(num_blocks: usize) -> Self {
         BitVec(vec![BitBlock::MAX; num_blocks])
     }
+
+    /// Constructs a new [`BitVec`] with the specified capacity in blocks
+    pub fn with_capacity(num_blocks: usize) -> Self {
+        BitVec(Vec::with_capacity(num_blocks))
+    }
+
+    /// Extends a [`BitVec`] with the contents of a [`BitSlice`]
+    pub fn extend_from_slice(&mut self, other: &BitSlice) {
+        self.0.extend_from_slice(&other.0);
+    }
 }
 
 impl fmt::Display for BitVec {
@@ -383,7 +393,7 @@ impl fmt::Display for BitVec {
     }
 }
 
-impl BitAndAssign<&Self> for BitRange {
+impl BitAndAssign<&Self> for BitSlice {
     #[inline]
     fn bitand_assign(&mut self, rhs: &Self) {
         for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
@@ -392,9 +402,9 @@ impl BitAndAssign<&Self> for BitRange {
     }
 }
 
-impl BitXorAssign<&Self> for BitRange {
+impl BitXorAssign<&Self> for BitSlice {
     #[inline]
-    fn bitxor_assign(&mut self, rhs: &BitRange) {
+    fn bitxor_assign(&mut self, rhs: &BitSlice) {
         for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
             *bits0 ^= bits1;
         }
@@ -448,15 +458,15 @@ impl FromIterator<bool> for BitVec {
 }
 
 impl Deref for BitVec {
-    type Target = BitRange;
+    type Target = BitSlice;
     fn deref(&self) -> &Self::Target {
-        BitRange::ref_cast(&self.0)
+        BitSlice::ref_cast(&self.0)
     }
 }
 
 impl DerefMut for BitVec {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        BitRange::ref_cast_mut(&mut self.0)
+        BitSlice::ref_cast_mut(&mut self.0)
     }
 }
 
@@ -559,8 +569,8 @@ mod test {
     fn block_index() {
         let mut rng = SmallRng::seed_from_u64(1);
         let vec: BitVec = BitVec::random(&mut rng, 10);
-        // let r: &BitRange = &vec;
-        let r1: &BitRange = &vec[4..9];
+        // let r: &BitSlice = &vec;
+        let r1: &BitSlice = &vec[4..9];
 
         for i in 0..r1.len() {
             assert_eq!(vec[4 + i], r1[i]);

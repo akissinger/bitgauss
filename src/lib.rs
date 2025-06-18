@@ -16,4 +16,4 @@ pub mod bitmatrix;
 pub mod bitvec;
 
 pub use bitmatrix::{BitMatrix, RowOps};
-pub use bitvec::{BitBlock, BitRange, BitVec};
+pub use bitvec::{BitBlock, BitSlice, BitVec};
