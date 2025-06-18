@@ -378,9 +378,43 @@ impl BitVec {
         BitVec(Vec::with_capacity(num_blocks))
     }
 
+    /// Reserves capacity for at least `additional` more blocks in the vector
+    pub fn reserve(&mut self, additional: usize) {
+        self.0.reserve(additional);
+    }
+
     /// Extends a [`BitVec`] with the contents of a [`BitSlice`]
     pub fn extend_from_slice(&mut self, other: &BitSlice) {
         self.0.extend_from_slice(&other.0);
+    }
+
+    /// Extends a [`BitVec`] with the contents of a [`BitSlice`], left-shifting the bits in each block
+    ///
+    /// Note this method assumes that the last `shift` bits in `self` are zero
+    pub fn extend_from_slice_left_shifted(&mut self, other: &BitSlice, shift: usize) {
+        if shift >= BLOCKSIZE {
+            panic!("Shift must be less than BLOCKSIZE");
+        } else if shift == 0 {
+            self.extend_from_slice(other);
+            return;
+        } else if self.0.is_empty() {
+            panic!("Cannot append to an empty BitVec with left shift");
+        }
+
+        self.0.reserve(other.0.len());
+        for bits in other.0.iter() {
+            let left_part = bits.wrapping_shr((BLOCKSIZE - shift) as u32);
+            let right_part = bits.wrapping_shl(shift as u32);
+            self.0.last_mut().map(|last| {
+                *last |= left_part;
+            });
+            self.0.push(right_part);
+        }
+    }
+
+    /// Pops the last block from the vector and returns it
+    pub fn pop(&mut self) -> Option<BitBlock> {
+        self.0.pop()
     }
 }
 
@@ -574,6 +608,32 @@ mod test {
 
         for i in 0..r1.len() {
             assert_eq!(vec[4 + i], r1[i]);
+        }
+    }
+
+    // test extend_from_slice_left_shifted
+    #[test]
+    fn extend_from_slice_left_shifted() {
+        let mut rng = SmallRng::seed_from_u64(1);
+        let shift = 17;
+        let mask = BitBlock::MAX.wrapping_shl(17);
+
+        let mut v1 = BitVec::random(&mut rng, 10);
+        v1[9] &= mask;
+
+        let v2 = BitVec::random(&mut rng, 10);
+
+        let mut v3 = v1.clone();
+        v3.extend_from_slice_left_shifted(&v2, shift);
+
+        for i in 0..v3.num_bits() {
+            if i < 10 * BLOCKSIZE - shift {
+                assert_eq!(v3.bit(i), v1.bit(i));
+            } else if i < 20 * BLOCKSIZE - shift {
+                assert_eq!(v3.bit(i), v2.bit(i - (10 * BLOCKSIZE - shift)));
+            } else {
+                assert_eq!(v3.bit(i), false);
+            }
         }
     }
 }

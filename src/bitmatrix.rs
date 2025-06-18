@@ -379,6 +379,7 @@ impl BitMatrix {
         let mut data = BitVec::with_capacity(rows * self.col_blocks);
         let col_blocks = min_blocks(self.cols());
 
+        data.reserve(rows * col_blocks);
         for i in 0..self.rows() {
             let start = i * self.col_blocks;
             data.extend_from_slice(&self.data[start..start + col_blocks]);
@@ -393,6 +394,43 @@ impl BitMatrix {
             rows,
             cols: self.cols(),
             col_blocks: col_blocks,
+            data,
+        }
+    }
+
+    /// Horizontally stacks this matrix with another one and returns the result
+    pub fn hstack(&self, other: &Self) -> Self {
+        if self.rows() != other.rows() {
+            panic!("Cannot horizontally stack matrices with different number of rows");
+        }
+
+        let cols = self.cols() + other.cols();
+        let mut data = BitVec::with_capacity(self.rows * min_blocks(cols));
+        let col_blocks = min_blocks(cols);
+        let self_col_blocks = min_blocks(self.cols());
+        let other_col_blocks = min_blocks(other.cols());
+        let pop_one = self_col_blocks + other_col_blocks > col_blocks;
+        let shift = BLOCKSIZE * self_col_blocks - self.cols();
+
+        for i in 0..self.rows() {
+            let start_self = i * self.col_blocks;
+            let start_other = i * other.col_blocks;
+            data.extend_from_slice(&self.data[start_self..start_self + self_col_blocks]);
+            data.extend_from_slice_left_shifted(
+                &other.data[start_other..start_other + other_col_blocks],
+                shift,
+            );
+
+            // pop the last block from the row if the extra padding is not needed
+            if pop_one {
+                data.pop();
+            }
+        }
+
+        BitMatrix {
+            rows: self.rows(),
+            cols,
+            col_blocks,
             data,
         }
     }
@@ -664,6 +702,37 @@ mod test {
             for j in 0..m2.cols() {
                 assert_eq!(m3[(i + m1.rows(), j)], m2[(i, j)]);
             }
+        }
+    }
+
+    // test BitMatrix::hstack
+    #[test]
+    fn matrix_hstack() {
+        let cases = [(10, 20, 5), (10, 150, 5), (10, 200, 300)];
+
+        for (rows, cols1, cols2) in cases {
+            println!(
+                "Testing hstack with {}x{} and {}x{}",
+                rows, cols1, rows, cols2
+            );
+            let mut rng = SmallRng::seed_from_u64(1);
+            let m1 = BitMatrix::random(&mut rng, rows, cols1);
+            let m2 = BitMatrix::random(&mut rng, rows, cols2);
+            let m3 = m1.hstack(&m2);
+
+            assert_eq!(m3.rows(), m1.rows());
+            assert_eq!(m3.cols(), m1.cols() + m2.cols());
+            for i in 0..m1.rows() {
+                for j in 0..m1.cols() {
+                    assert_eq!(m3[(i, j)], m1[(i, j)]);
+                }
+                for j in 0..m2.cols() {
+                    assert_eq!(m3[(i, j + m1.cols())], m2[(i, j)]);
+                }
+            }
+
+            // check extra padding was not added
+            assert_eq!(m3.col_blocks, min_blocks(m3.cols()));
         }
     }
 }
