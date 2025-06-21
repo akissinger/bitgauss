@@ -1,0 +1,21 @@
+[tool.uv.workspace]
+members = ["pybindings"]
+
+[tool.uv]
+dev-dependencies = [
+    "pip >=25,<26",
+    "maturin >=1.8.2,<2",
+    "pytest >=8.3.3,<9",
+    "ruff >=0.6.8,<1",
+    "pre-commit >=4.1.0,<5",
+    "mypy >=1.11.2,<2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.maturin]
+manifest-path = "pybindings/Cargo.toml"
+python-source = "pybindings"
+module-name = "bitgauss"
