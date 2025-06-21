@@ -220,7 +220,7 @@ impl BitMatrix {
                     // load source_block into buffer
                     for k in 0..BLOCKSIZE {
                         let l = source_block + k * m.col_blocks;
-                        buffer[k] = if i < m.data.len() { m.data[l] } else { 0 };
+                        buffer[k] = if l < m.data.len() { m.data[l] } else { 0 };
                     }
                 } else {
                     source_block = BLOCKSIZE * j * self.col_blocks + i;
@@ -807,11 +807,10 @@ mod test {
     #[test]
     fn matrix_nullspace() {
         let mut rng = SmallRng::seed_from_u64(1);
-        let m = BitMatrix::random(&mut rng, 10, 20);
+        let m = BitMatrix::random(&mut rng, 70, 200);
         let ns = m.nullspace();
         let ns_mat = BitMatrix::vstack_from_iter(ns.iter());
-        let n = ns_mat.transposed();
-        // assert_eq!(ns_mat.rank(), ns_mat.rows());
-        // assert!((&m * &ns_mat.transposed()).is_zero());
+        assert_eq!(ns_mat.rank(), ns_mat.rows());
+        assert!((&m * &ns_mat.transposed()).is_zero());
     }
 }
