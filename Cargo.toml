@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["bitgauss"]
+members = ["bitgauss", "pybindings"]
 
 [workspace.package]
 authors = ["Aleks Kissinger <aleks0@gmail.com>"]
