@@ -1,24 +1,13 @@
-[package]
-name = "bitgauss"
-description = "Fast boolean linear algebra library"
-version = "0.3.0"
+[workspace]
+resolver = "3"
+members = ["bitgauss"]
+
+[workspace.package]
 authors = ["Aleks Kissinger <aleks0@gmail.com>"]
 keywords = ["linear-algebra", "matrix", "bits"]
 categories = ["science"]
 homepage = "https://github.com/akissinger/bitgauss"
 repository = "https://github.com/akissinger/bitgauss"
-
 edition = "2021"
 rust-version = "1.81"
 license = "Apache-2.0"
-
-[dependencies]
-rand = { version = "0.9.1", features = ["small_rng"] }
-ref-cast = "1.0.24"
-
-[dev-dependencies]
-criterion = { version = "0.6.0", features = ["html_reports"] }
-
-[[bench]]
-name = "matrix_ops"
-harness = false

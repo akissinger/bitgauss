@@ -1,0 +1,23 @@
+[package]
+name = "bitgauss"
+description = "Fast boolean linear algebra library"
+version = "0.3.0"
+authors = { workspace = true }
+keywords = { workspace = true }
+categories = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+rand = { version = "0.9.1", features = ["small_rng"] }
+ref-cast = "1.0.24"
+
+[dev-dependencies]
+criterion = { version = "0.6.0", features = ["html_reports"] }
+
+[[bench]]
+name = "matrix_ops"
+harness = false
