@@ -80,6 +80,11 @@ impl BitMatrix {
         }
     }
 
+    /// Checks if the matrix consists of all zero bits
+    pub fn is_zero(&self) -> bool {
+        self.data.is_empty() || self.data.block_iter().all(|b| b == 0)
+    }
+
     /// Creates a new identity `BitMatrix` of size `size` x `size`
     pub fn identity(size: usize) -> Self {
         let blocks = min_blocks(size);
@@ -144,38 +149,6 @@ impl BitMatrix {
         }
 
         m
-    }
-
-    /// Creates a new `BitMatrix` from an iterator of rows, where each row is represented as a 1xn
-    /// `BitMatrix`
-    pub fn from_rows(row_iter: impl IntoIterator<Item = BitMatrix>) -> Self {
-        let mut it = row_iter.into_iter();
-        let mut rows;
-        let cols;
-        let col_blocks;
-        let mut data = BitVec::new();
-        if let Some(first_row) = it.next() {
-            cols = first_row.cols();
-            col_blocks = min_blocks(cols);
-            rows = 1;
-        } else {
-            return Self::zeros(0, 0);
-        }
-
-        for row in it {
-            if row.cols() != cols {
-                panic!("All rows must have the same number of columns");
-            }
-            data.extend_from_slice(&row.data[0..col_blocks]);
-            rows += 1;
-        }
-
-        BitMatrix {
-            rows,
-            cols,
-            col_blocks,
-            data,
-        }
     }
 
     /// Returns the number of logical rows in the matrix
@@ -464,6 +437,30 @@ impl BitMatrix {
             cols,
             col_blocks,
             data,
+        }
+    }
+
+    /// Vertically stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
+    ///
+    /// If the iterator is empty, returns an empty `BitMatrix` with 0 rows and 0 columns.
+    pub fn vstack_from_iter<'a>(iter: impl IntoIterator<Item = &'a BitMatrix>) -> Self {
+        let mut it = iter.into_iter();
+        if let Some(first) = it.next() {
+            it.fold(first.clone(), |m, n| m.vstack(n))
+        } else {
+            Self::zeros(0, 0)
+        }
+    }
+
+    /// Horizontally stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
+    ///
+    /// If the iterator is empty, returns an empty `BitMatrix` with 0 rows and 0 columns.
+    pub fn hstack_from_iter<'a>(iter: impl IntoIterator<Item = &'a BitMatrix>) -> Self {
+        let mut it = iter.into_iter();
+        if let Some(first) = it.next() {
+            it.fold(first.clone(), |m, n| m.hstack(n))
+        } else {
+            Self::zeros(0, 0)
         }
     }
 
@@ -804,5 +801,16 @@ mod test {
             // check extra padding was not added
             assert_eq!(m3.col_blocks, min_blocks(m3.cols()));
         }
+    }
+
+    // test BitMatrix::nullspace
+    #[test]
+    fn matrix_nullspace() {
+        let mut rng = SmallRng::seed_from_u64(1);
+        let m = BitMatrix::random(&mut rng, 10, 20);
+        let ns = m.nullspace();
+        let ns_mat = BitMatrix::vstack_from_iter(ns.iter());
+        assert_eq!(ns_mat.rank(), ns_mat.rows());
+        assert!((&m * &ns_mat.transposed()).is_zero());
     }
 }
