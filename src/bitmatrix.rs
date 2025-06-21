@@ -808,8 +808,7 @@ mod test {
     fn matrix_nullspace() {
         let mut rng = SmallRng::seed_from_u64(1);
         let m = BitMatrix::random(&mut rng, 70, 200);
-        let ns = m.nullspace();
-        let ns_mat = BitMatrix::vstack_from_iter(ns.iter());
+        let ns_mat = BitMatrix::vstack_from_iter(&m.nullspace());
         assert_eq!(ns_mat.rank(), ns_mat.rows());
         assert!((&m * &ns_mat.transposed()).is_zero());
     }
