@@ -15,3 +15,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 bitgauss = { version = "*", path = "../bitgauss" }
+pyo3 = { version = "0.25.1" }
