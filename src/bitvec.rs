@@ -373,6 +373,11 @@ impl BitVec {
         BitVec(vec![BitBlock::MAX; num_blocks])
     }
 
+    /// Constructs a new empty [`BitVec`].
+    pub fn new() -> Self {
+        BitVec(Vec::new())
+    }
+
     /// Constructs a new [`BitVec`] with the specified capacity in blocks
     pub fn with_capacity(num_blocks: usize) -> Self {
         BitVec(Vec::with_capacity(num_blocks))

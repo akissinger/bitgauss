@@ -146,6 +146,38 @@ impl BitMatrix {
         m
     }
 
+    /// Creates a new `BitMatrix` from an iterator of rows, where each row is represented as a 1xn
+    /// `BitMatrix`
+    pub fn from_rows(row_iter: impl IntoIterator<Item = BitMatrix>) -> Self {
+        let mut it = row_iter.into_iter();
+        let mut rows;
+        let cols;
+        let col_blocks;
+        let mut data = BitVec::new();
+        if let Some(first_row) = it.next() {
+            cols = first_row.cols();
+            col_blocks = min_blocks(cols);
+            rows = 1;
+        } else {
+            return Self::zeros(0, 0);
+        }
+
+        for row in it {
+            if row.cols() != cols {
+                panic!("All rows must have the same number of columns");
+            }
+            data.extend_from_slice(&row.data[0..col_blocks]);
+            rows += 1;
+        }
+
+        BitMatrix {
+            rows,
+            cols,
+            col_blocks,
+            data,
+        }
+    }
+
     /// Returns the number of logical rows in the matrix
     #[inline]
     pub fn rows(&self) -> usize {
@@ -433,6 +465,44 @@ impl BitMatrix {
             col_blocks,
             data,
         }
+    }
+
+    /// Computes a basis for the nullspace a the matrix and returns it as the rows of a new matrix
+    pub fn nullspace(&self) -> Vec<BitMatrix> {
+        if self.rows() == 0 || self.cols() == 0 {
+            return Vec::new();
+        }
+
+        let mut m = self.clone();
+        let pivot_cols = m.gauss_helper(true, &mut ());
+        let mut free_vars = Vec::with_capacity(self.cols() - pivot_cols.len());
+        let mut it = pivot_cols.iter().peekable();
+
+        for i in 0..self.cols() {
+            if it.peek().is_some_and(|&&p| p == i) {
+                it.next();
+            } else {
+                free_vars.push(i);
+            }
+        }
+
+        // Generate basis vectors for the nullspace
+        let mut basis = Vec::with_capacity(free_vars.len());
+        for &free_var in &free_vars {
+            let mut vec = Self::zeros(1, self.cols());
+            vec.set_bit(0, free_var, true);
+
+            // Back substitution
+            for (row, &pivot_col) in pivot_cols.iter().enumerate().rev() {
+                if free_var > pivot_col && m[(row, free_var)] {
+                    vec.set_bit(0, pivot_col, true);
+                }
+            }
+
+            basis.push(vec);
+        }
+
+        basis
     }
 }
 
