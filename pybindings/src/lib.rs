@@ -4,11 +4,11 @@
 
 pub mod bitmatrix;
 
-use crate::bitmatrix::BitMatrix;
+use crate::bitmatrix::PyBitMatrix;
 use pyo3::prelude::*;
 
 #[pymodule]
 fn bitgauss(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<BitMatrix>()?;
+    m.add_class::<PyBitMatrix>()?;
     Ok(())
 }
