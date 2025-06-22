@@ -141,40 +141,35 @@ impl PyBitMatrix {
 
     /// Computes the inverse of an invertible matrix
     pub fn inverse(&self) -> PyResult<Self> {
-        if self.inner.rows() != self.inner.cols() {
-            return Err(PyValueError::new_err("Matrix must be square"));
-        }
-
-        match std::panic::catch_unwind(|| self.inner.inverse()) {
+        match self.inner.try_inverse() {
             Ok(inv) => Ok(PyBitMatrix { inner: inv }),
-            Err(_) => Err(PyValueError::new_err("Matrix is not invertible")),
+            Err(e) => Err(PyValueError::new_err(format!(
+                "Matrix inversion failed: {}",
+                e
+            ))),
         }
     }
 
     /// Vertically stacks this matrix with another one and returns the result
     pub fn vstack(&self, other: &PyBitMatrix) -> PyResult<Self> {
-        if self.inner.cols() != other.inner.cols() {
-            return Err(PyValueError::new_err(
-                "Cannot vertically stack matrices with different number of columns",
-            ));
+        match self.inner.try_vstack(&other.inner) {
+            Ok(result) => Ok(PyBitMatrix { inner: result }),
+            Err(e) => Err(PyValueError::new_err(format!(
+                "Vertical stack failed: {}",
+                e
+            ))),
         }
-
-        Ok(PyBitMatrix {
-            inner: self.inner.vstack(&other.inner),
-        })
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
     pub fn hstack(&self, other: &PyBitMatrix) -> PyResult<Self> {
-        if self.inner.rows() != other.inner.rows() {
-            return Err(PyValueError::new_err(
-                "Cannot horizontally stack matrices with different number of rows",
-            ));
+        match self.inner.try_hstack(&other.inner) {
+            Ok(result) => Ok(PyBitMatrix { inner: result }),
+            Err(e) => Err(PyValueError::new_err(format!(
+                "Horizontal stack failed: {}",
+                e
+            ))),
         }
-
-        Ok(PyBitMatrix {
-            inner: self.inner.hstack(&other.inner),
-        })
     }
 
     // /// Vertically stacks a list of BitMatrix instances into a single BitMatrix
@@ -275,6 +270,61 @@ impl PyBitMatrix {
                 Err(PyValueError::new_err("Invalid index type for assignment"))
             }
         })
+    }
+
+    /// Matrix multiplication using the @ operator (Python 3.5+)
+    pub fn __matmul__(&self, other: &PyBitMatrix) -> PyResult<Self> {
+        match self.inner.try_mul(&other.inner) {
+            Ok(result) => Ok(PyBitMatrix { inner: result }),
+            Err(e) => Err(PyValueError::new_err(format!(
+                "Matrix multiplication failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Matrix multiplication using the * operator (for compatibility)
+    pub fn __mul__(&self, other: &PyBitMatrix) -> PyResult<Self> {
+        self.__matmul__(other)
+    }
+
+    /// Right-hand matrix multiplication
+    pub fn __rmul__(&self, other: &PyBitMatrix) -> PyResult<Self> {
+        other.__matmul__(self)
+    }
+
+    /// In-place matrix multiplication using @=
+    pub fn __imatmul__(&mut self, other: &PyBitMatrix) -> PyResult<()> {
+        let result = self.__matmul__(other)?;
+        self.inner = result.inner;
+        Ok(())
+    }
+
+    /// Matrix multiplication method (alternative to operators)
+    pub fn matmul(&self, other: &PyBitMatrix) -> PyResult<Self> {
+        self.__matmul__(other)
+    }
+
+    /// Matrix power (repeated multiplication)
+    pub fn __pow__(&self, exponent: usize, _modulus: Option<&PyBitMatrix>) -> PyResult<Self> {
+        if self.inner.rows() != self.inner.cols() {
+            return Err(PyValueError::new_err(
+                "Matrix power is only defined for square matrices",
+            ));
+        }
+
+        if exponent == 0 {
+            return Ok(PyBitMatrix {
+                inner: BitMatrix::identity(self.inner.rows()),
+            });
+        }
+
+        let mut result = self.copy();
+        for _ in 1..exponent {
+            result = result.__matmul__(&self)?;
+        }
+
+        Ok(result)
     }
 
     /// Convert matrix to a list of lists (for easier Python interop)

@@ -5,6 +5,17 @@ use std::{
     ops::{Index, Mul},
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BitMatrixError(pub String);
+
+// Standard implementations of error traits for `BitMatrixError`
+impl std::fmt::Display for BitMatrixError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BitMatrixError: {}", self.0)
+    }
+}
+impl std::error::Error for BitMatrixError {}
+
 /// A matrix of bits, represented as a vector of blocks of bits
 ///
 /// The matrix is stored in row-major order, with each row represented as a `BitRange` of `BitBlock`s. If
@@ -357,27 +368,65 @@ impl BitMatrix {
         self.clone().gauss_helper(false, &mut ()).len()
     }
 
-    /// Computes the inverse of an invertible matrix
-    pub fn inverse(&self) -> Self {
+    /// Computes the inverse of the matrix if it is invertible, otherwise returns an error
+    pub fn try_inverse(&self) -> Result<Self, BitMatrixError> {
         if self.rows() != self.cols() {
-            panic!("Matrix must be square");
+            return Err(BitMatrixError("Matrix must be square".to_string()));
         }
         let mut inv = BitMatrix::identity(self.cols());
         let pcols = self.clone().gauss_helper(true, &mut inv);
 
         if pcols.len() != self.cols() {
-            panic!("Matrix is not invertible");
+            return Err(BitMatrixError("Matrix is not invertible".to_string()));
         }
 
-        inv
+        Ok(inv)
     }
 
-    /// Vertically stacks this matrix with another one and returns the result
+    /// Computes the inverse of an invertible matrix
+    pub fn inverse(&self) -> Self {
+        self.try_inverse().unwrap()
+    }
+
+    /// Tries to multiply two matrices and returns the result
     ///
-    /// The resulting matrix will have the minimal column padding.
-    pub fn vstack(&self, other: &Self) -> Self {
+    /// Returns an error if the matrices have incompatible dimensions
+    pub fn try_mul(&self, other: &Self) -> Result<Self, BitMatrixError> {
+        if self.cols() != other.rows() {
+            return Err(BitMatrixError(format!(
+                "Cannot multiply matrices of dimensions {}x{} and {}x{}",
+                self.rows(),
+                self.cols(),
+                other.rows(),
+                other.cols()
+            )));
+        }
+
+        let mut res = BitMatrix::zeros(self.rows, other.cols);
+
+        for i in 0..self.rows {
+            let row = res.row_mut(i);
+            self.row(i).iter().enumerate().for_each(|(j, b)| {
+                if b {
+                    *row ^= other.row(j);
+                }
+            });
+        }
+
+        Ok(res)
+    }
+
+    /// Try to vertically stack this matrix with another one and returns the result
+    ///
+    /// The resulting matrix will have the minimal column padding. Returns an error if the
+    /// matrices have different numbers of columns.
+    pub fn try_vstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.cols() != other.cols() {
-            panic!("Cannot vertically stack matrices with different number of columns");
+            return Err(BitMatrixError(format!(
+                "Cannot vertically stack matrices with different number of columns: {} != {}",
+                self.cols(),
+                other.cols()
+            )));
         }
 
         let rows = self.rows() + other.rows();
@@ -395,18 +444,27 @@ impl BitMatrix {
             data.extend_from_slice(&other.data[start..start + col_blocks]);
         }
 
-        BitMatrix {
+        Ok(BitMatrix {
             rows,
             cols: self.cols(),
             col_blocks,
             data,
-        }
+        })
+    }
+
+    /// Vertically stacks this matrix with another one and returns the result
+    pub fn vstack(&self, other: &Self) -> Self {
+        self.try_vstack(other).unwrap()
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
-    pub fn hstack(&self, other: &Self) -> Self {
+    pub fn try_hstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.rows() != other.rows() {
-            panic!("Cannot horizontally stack matrices with different number of rows");
+            return Err(BitMatrixError(format!(
+                "Cannot horizontally stack matrices with different number of rows: {} != {}",
+                self.rows(),
+                other.rows()
+            )));
         }
 
         let cols = self.cols() + other.cols();
@@ -432,12 +490,17 @@ impl BitMatrix {
             }
         }
 
-        BitMatrix {
+        Ok(BitMatrix {
             rows: self.rows(),
             cols,
             col_blocks,
             data,
-        }
+        })
+    }
+
+    /// Horizontally stacks this matrix with another one and returns the result
+    pub fn hstack(&self, other: &Self) -> Self {
+        self.try_hstack(other).unwrap()
     }
 
     /// Vertically stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
@@ -596,24 +659,7 @@ impl Mul for &BitMatrix {
     type Output = BitMatrix;
     /// Multiplies two matrices.
     fn mul(self, rhs: Self) -> Self::Output {
-        if self.cols != rhs.rows {
-            panic!(
-                "Attempting to multiply matrices of incompatible dimensions: {} != {}",
-                self.cols, rhs.rows
-            );
-        }
-        let mut res = BitMatrix::zeros(self.rows, rhs.cols);
-
-        for i in 0..self.rows {
-            let row = res.row_mut(i);
-            self.row(i).iter().enumerate().for_each(|(j, b)| {
-                if b {
-                    *row ^= rhs.row(j);
-                }
-            });
-        }
-
-        res
+        self.try_mul(rhs).unwrap()
     }
 }
 
