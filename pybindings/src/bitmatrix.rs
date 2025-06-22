@@ -172,44 +172,6 @@ impl PyBitMatrix {
         }
     }
 
-    // /// Vertically stacks a list of BitMatrix instances into a single BitMatrix
-    // #[staticmethod]
-    // pub fn vstack_from_list(matrices: &PyList) -> PyResult<Self> {
-    //     let rust_matrices: Result<Vec<&BitMatrix>, _> = matrices
-    //         .iter()
-    //         .map(|item| {
-    //             let matrix: &PyBitMatrix = item.extract()?;
-    //             Ok(&matrix.inner)
-    //         })
-    //         .collect();
-
-    //     match rust_matrices {
-    //         Ok(mats) => Ok(PyBitMatrix {
-    //             inner: BitMatrix::vstack_from_iter(mats),
-    //         }),
-    //         Err(e) => Err(e),
-    //     }
-    // }
-
-    // /// Horizontally stacks a list of BitMatrix instances into a single BitMatrix
-    // #[staticmethod]
-    // pub fn hstack_from_list(matrices: &PyList) -> PyResult<Self> {
-    //     let rust_matrices: Result<Vec<&BitMatrix>, _> = matrices
-    //         .iter()
-    //         .map(|item| {
-    //             let matrix: &PyBitMatrix = item.extract()?;
-    //             Ok(&matrix.inner)
-    //         })
-    //         .collect();
-
-    //     match rust_matrices {
-    //         Ok(mats) => Ok(PyBitMatrix {
-    //             inner: BitMatrix::hstack_from_iter(mats),
-    //         }),
-    //         Err(e) => Err(e),
-    //     }
-    // }
-
     /// Computes a basis for the nullspace of the matrix
     pub fn nullspace(&self) -> Vec<PyBitMatrix> {
         self.inner
@@ -321,7 +283,7 @@ impl PyBitMatrix {
 
         let mut result = self.copy();
         for _ in 1..exponent {
-            result = result.__matmul__(&self)?;
+            result.inner = &result.inner * &self.inner;
         }
 
         Ok(result)
