@@ -284,7 +284,7 @@ impl PyBitMatrix {
         Ok(result)
     }
 
-    /// Convert matrix to a list of lists (for easier Python interop)
+    /// Convert matrix to a list of lists of bools
     pub fn to_list(&self) -> Vec<Vec<bool>> {
         (0..self.inner.rows())
             .map(|i| {
@@ -295,7 +295,7 @@ impl PyBitMatrix {
             .collect()
     }
 
-    /// Create matrix from a list of lists
+    /// Create matrix from a list of lists of bools
     #[staticmethod]
     pub fn from_list(data: Vec<Vec<bool>>) -> PyResult<Self> {
         if data.is_empty() {
@@ -318,6 +318,43 @@ impl PyBitMatrix {
         }
 
         let matrix = BitMatrix::build(rows, cols, |i, j| data[i][j]);
+        Ok(PyBitMatrix { inner: matrix })
+    }
+
+    /// Convert matrix to a list of lists of integers (0 or 1)
+    pub fn to_int_list(&self) -> Vec<Vec<usize>> {
+        (0..self.inner.rows())
+            .map(|i| {
+                (0..self.inner.cols())
+                    .map(|j| if self.inner.bit(i, j) { 1 } else { 0 })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// Create matrix from a list of lists of integers (0 or 1)
+    #[staticmethod]
+    pub fn from_int_list(data: Vec<Vec<usize>>) -> PyResult<Self> {
+        if data.is_empty() {
+            return Ok(PyBitMatrix::zeros(0, 0));
+        }
+
+        let rows = data.len();
+        let cols = data[0].len();
+
+        // Check that all rows have the same length
+        for (i, row) in data.iter().enumerate() {
+            if row.len() != cols {
+                return Err(PyValueError::new_err(format!(
+                    "Row {} has length {}, expected {}",
+                    i,
+                    row.len(),
+                    cols
+                )));
+            }
+        }
+
+        let matrix = BitMatrix::build(rows, cols, |i, j| data[i][j] != 0);
         Ok(PyBitMatrix { inner: matrix })
     }
 
