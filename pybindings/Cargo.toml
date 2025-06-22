@@ -1,6 +1,6 @@
 [package]
-name = "bingauss-pybindings"
-version = { workspace = true }
+name = "bitgauss_pybindings"
+version = "0.0.0"
 authors = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
