@@ -1,7 +1,7 @@
 [package]
 name = "bitgauss"
 description = "A fast boolean linear algebra library"
-version = "0.3.0"
+version = { workspace = true }
 authors = { workspace = true }
 keywords = { workspace = true }
 categories = { workspace = true }
