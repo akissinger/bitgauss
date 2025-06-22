@@ -198,11 +198,6 @@ impl PyBitMatrix {
         format!("BitMatrix({}x{})", self.inner.rows(), self.inner.cols())
     }
 
-    /// Support for len() function
-    pub fn __len__(&self) -> usize {
-        self.inner.rows()
-    }
-
     /// Support for indexing with [i, j]
     pub fn __getitem__(&self, key: PyObject) -> PyResult<PyObject> {
         Python::with_gil(|py| {

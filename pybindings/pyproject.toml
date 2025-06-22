@@ -37,3 +37,12 @@ repository = "https://github.com/akissinger/bitgauss"
 module-name = "bitgauss"
 manifest-path = "Cargo.toml"
 
+[project.optional-dependencies]
+test = [
+    "pytest>=8.4.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

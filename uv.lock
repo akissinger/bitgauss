@@ -22,6 +22,15 @@ name = "bitgauss"
 version = "0.3.0"
 source = { editable = "pybindings" }
 
+[package.optional-dependencies]
+test = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pytest", marker = "extra == 'test'", specifier = ">=8.4.1" }]
+provides-extras = ["test"]
+
 [[package]]
 name = "cfgv"
 version = "3.4.0"
