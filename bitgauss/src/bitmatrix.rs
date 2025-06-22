@@ -293,6 +293,7 @@ impl BitMatrix {
     #[inline]
     pub fn transpose_inplace(&mut self) {
         self.pad_to_square();
+        (self.rows, self.cols) = (self.cols, self.rows);
         self.transpose_helper(None);
     }
 
