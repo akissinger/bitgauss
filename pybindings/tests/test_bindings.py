@@ -364,11 +364,8 @@ class TestBitMatrixOperations:
         a = BitMatrix(2, 3)
         b = BitMatrix(2, 2)
         
-        # Horizontal stack should fail (different number of rows would be OK, but different cols for vstack)
-        c = BitMatrix(3, 3)
-        
         with pytest.raises(ValueError):
-            a.vstack(c)  # Different column counts
+            a.vstack(b)  # Different column counts
     
     def test_nullspace(self):
         """Test nullspace computation."""
