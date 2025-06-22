@@ -126,7 +126,7 @@ impl BitMatrix {
     #[inline]
     pub fn random(rng: &mut impl Rng, rows: usize, cols: usize) -> Self {
         let col_blocks = min_blocks(cols);
-        let num_blocks = BLOCKSIZE * rows * col_blocks;
+        let num_blocks = rows * col_blocks;
         let mask = BitBlock::MAX.wrapping_shl((BLOCKSIZE - (cols % BLOCKSIZE)) as u32);
         let data = (0..num_blocks)
             .map(|i| {
@@ -199,10 +199,10 @@ impl BitMatrix {
         let row_blocks = min_blocks(data_rows);
         if data_rows != row_blocks * BLOCKSIZE || row_blocks != self.col_blocks {
             let blocks = usize::max(row_blocks, self.col_blocks);
-            let mut data = Vec::with_capacity(BLOCKSIZE * blocks * blocks);
+            let mut data = BitVec::with_capacity(BLOCKSIZE * blocks * blocks);
             for i in 0..(BLOCKSIZE * blocks) {
                 for j in 0..blocks {
-                    data.push(if i < self.rows() && j < self.col_blocks {
+                    data.push_block(if i < self.rows() && j < self.col_blocks {
                         self.data[i * self.col_blocks + j]
                     } else {
                         0
@@ -210,7 +210,7 @@ impl BitMatrix {
                 }
             }
 
-            self.data = data.into();
+            self.data = data;
             self.col_blocks = blocks;
         }
     }
@@ -718,11 +718,28 @@ mod test {
     }
 
     #[test]
+    fn pad_to_square_sm() {
+        let mut rng = SmallRng::seed_from_u64(1);
+        let m = BitMatrix::random(&mut rng, 4, 5);
+        let mut n = m.clone();
+        n.pad_to_square();
+        assert_eq!(n.col_blocks, 1);
+        assert_eq!(n.data.len() / (n.col_blocks * BLOCKSIZE), 1);
+        for i in 0..m.rows() {
+            for j in 0..m.cols() {
+                assert_eq!(m[(i, j)], n[(i, j)]);
+            }
+        }
+    }
+
+    #[test]
     fn pad_to_square() {
         let mut rng = SmallRng::seed_from_u64(1);
         let m = BitMatrix::random(&mut rng, 300, 200);
         let mut n = m.clone();
         n.pad_to_square();
+        assert_eq!(n.col_blocks, 5);
+        assert_eq!(n.data.len() / (n.col_blocks * BLOCKSIZE), 5);
         for i in 0..m.rows() {
             for j in 0..m.cols() {
                 assert_eq!(m[(i, j)], n[(i, j)]);
@@ -858,5 +875,288 @@ mod test {
         let ns_mat = BitMatrix::vstack_from_iter(&m.nullspace());
         assert_eq!(ns_mat.rank(), ns_mat.rows());
         assert!((&m * &ns_mat.transposed()).is_zero());
+    }
+
+    #[test]
+    fn test_build_function() {
+        // Test building a matrix with a custom function
+        let m = BitMatrix::build(3, 4, |i, j| (i + j) % 2 == 0);
+        assert_eq!(m.rows(), 3);
+        assert_eq!(m.cols(), 4);
+
+        // Check the pattern: alternating bits
+        for i in 0..3 {
+            for j in 0..4 {
+                assert_eq!(m[(i, j)], (i + j) % 2 == 0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_empty_matrix() {
+        let m = BitMatrix::zeros(0, 0);
+        assert_eq!(m.rows(), 0);
+        assert_eq!(m.cols(), 0);
+        assert!(m.is_zero());
+    }
+
+    #[test]
+    fn test_single_element_matrix() {
+        let m = BitMatrix::build(1, 1, |_, _| true);
+        assert_eq!(m.rows(), 1);
+        assert_eq!(m.cols(), 1);
+        assert!(m[(0, 0)]);
+        assert!(!m.is_zero());
+    }
+
+    #[test]
+    fn test_bit_operations() {
+        let mut m = BitMatrix::zeros(3, 3);
+
+        // Test setting and getting bits
+        m.set_bit(1, 2, true);
+        assert!(m[(1, 2)]);
+        assert!(!m[(1, 1)]);
+
+        m.set_bit(0, 0, true);
+        assert!(m[(0, 0)]);
+
+        // Test setting bit to false
+        m.set_bit(1, 2, false);
+        assert!(!m[(1, 2)]);
+    }
+
+    #[test]
+    fn test_is_zero() {
+        let zero_matrix = BitMatrix::zeros(10, 10);
+        assert!(zero_matrix.is_zero());
+
+        let mut non_zero = BitMatrix::zeros(10, 10);
+        non_zero.set_bit(5, 5, true);
+        assert!(!non_zero.is_zero());
+
+        // Test with identity matrix
+        let identity = BitMatrix::identity(5);
+        assert!(!identity.is_zero());
+    }
+
+    #[test]
+    fn test_vstack_dimension_mismatch() {
+        let m1 = BitMatrix::zeros(3, 4);
+        let m2 = BitMatrix::zeros(2, 5); // Different number of columns
+        m1.try_vstack(&m2).unwrap_err();
+    }
+
+    #[test]
+    fn test_hstack_dimension_mismatch() {
+        let m1 = BitMatrix::zeros(3, 4);
+        let m2 = BitMatrix::zeros(5, 2); // Different number of rows
+        m1.try_hstack(&m2).unwrap_err();
+    }
+
+    #[test]
+    fn test_vstack_from_iter_empty() {
+        let result = BitMatrix::vstack_from_iter(std::iter::empty());
+        assert_eq!(result.rows(), 0);
+        assert_eq!(result.cols(), 0);
+    }
+
+    #[test]
+    fn test_hstack_from_iter_empty() {
+        let result = BitMatrix::hstack_from_iter(std::iter::empty());
+        assert_eq!(result.rows(), 0);
+        assert_eq!(result.cols(), 0);
+    }
+
+    #[test]
+    fn test_vstack_from_iter_single() {
+        let m = BitMatrix::identity(3);
+        let result = BitMatrix::vstack_from_iter([&m]);
+        assert_eq!(result, m);
+    }
+
+    #[test]
+    fn test_hstack_from_iter_single() {
+        let m = BitMatrix::identity(3);
+        let result = BitMatrix::hstack_from_iter([&m]);
+        assert_eq!(result, m);
+    }
+
+    #[test]
+    fn test_vstack_from_iter_multiple() {
+        let m1 = BitMatrix::identity(2);
+        let m2 = BitMatrix::zeros(3, 2);
+        let m3 = BitMatrix::build(1, 2, |_, _| true);
+
+        let result = BitMatrix::vstack_from_iter([&m1, &m2, &m3]);
+        assert_eq!(result.rows(), 6);
+        assert_eq!(result.cols(), 2);
+
+        // Check that the stacking worked correctly
+        assert_eq!(result[(0, 0)], true); // From identity
+        assert_eq!(result[(1, 1)], true); // From identity
+        assert_eq!(result[(2, 0)], false); // From zeros
+        assert_eq!(result[(5, 1)], true); // From all-ones row
+    }
+
+    #[test]
+    fn test_hstack_from_iter_multiple() {
+        let m1 = BitMatrix::identity(2);
+        let m2 = BitMatrix::zeros(2, 3);
+        let m3 = BitMatrix::build(2, 1, |_, _| true);
+
+        let result = BitMatrix::hstack_from_iter([&m1, &m2, &m3]);
+        assert_eq!(result.rows(), 2);
+        assert_eq!(result.cols(), 6);
+
+        // Check that the stacking worked correctly
+        assert_eq!(result[(0, 0)], true); // From identity
+        assert_eq!(result[(1, 1)], true); // From identity
+        assert_eq!(result[(0, 2)], false); // From zeros
+        assert_eq!(result[(0, 5)], true); // From all-ones column
+    }
+
+    #[test]
+    fn test_nullspace_empty_matrix() {
+        let m = BitMatrix::zeros(0, 0);
+        let nullspace = m.nullspace();
+        assert_eq!(nullspace.len(), 0);
+    }
+
+    #[test]
+    fn test_nullspace_zero_matrix() {
+        let m = BitMatrix::zeros(3, 5);
+        let nullspace = m.nullspace();
+        assert_eq!(nullspace.len(), 5); // All columns are free variables
+
+        // Verify each basis vector is in the nullspace
+        for basis_vec in &nullspace {
+            let result = &m * &basis_vec.transposed();
+            assert!(result.is_zero());
+        }
+    }
+
+    #[test]
+    fn test_nullspace_identity_matrix() {
+        let m = BitMatrix::identity(5);
+        let nullspace = m.nullspace();
+        assert_eq!(nullspace.len(), 0); // No nullspace for invertible matrix
+    }
+
+    #[test]
+    fn test_nullspace_properties() {
+        let mut rng = SmallRng::seed_from_u64(123);
+        let m = BitMatrix::random(&mut rng, 4, 7);
+        let nullspace = m.nullspace();
+
+        // Each basis vector should be in the nullspace
+        for basis_vec in &nullspace {
+            let result = &m * &basis_vec.transposed();
+            assert!(result.is_zero());
+        }
+
+        // The nullspace basis should be linearly independent
+        if !nullspace.is_empty() {
+            let ns_matrix = BitMatrix::vstack_from_iter(&nullspace);
+            assert_eq!(ns_matrix.rank(), ns_matrix.rows());
+        }
+    }
+
+    #[test]
+    fn test_row_operations() {
+        let mut m = BitMatrix::identity(3);
+        let original = m.clone();
+
+        // Test row swap
+        m.swap_rows(0, 2);
+        assert_eq!(m[(0, 0)], false);
+        assert_eq!(m[(2, 2)], false);
+        assert_eq!(m[(0, 2)], true);
+        assert_eq!(m[(2, 0)], true);
+
+        // Swap back
+        m.swap_rows(0, 2);
+        assert_eq!(m, original);
+
+        // Test row addition (XOR)
+        m.add_row(0, 1); // Add row 0 to row 1
+        assert_eq!(m[(1, 0)], true); // XOR of 0 and 1
+        assert_eq!(m[(1, 1)], true); // XOR of 1 and 0
+    }
+
+    #[test]
+    fn test_add_bits_to_row() {
+        let mut m = BitMatrix::zeros(3, 4);
+        let bits = BitMatrix::build(1, 4, |_, j| j % 2 == 0);
+
+        m.add_bits_to_row(bits.row(0), 1);
+
+        // Check that the bits were added correctly
+        for j in 0..4 {
+            assert_eq!(m[(1, j)], j % 2 == 0);
+        }
+    }
+
+    #[test]
+    fn test_row_accessors() {
+        let m = BitMatrix::identity(3);
+
+        // Test immutable row access
+        let row0 = m.row(0);
+        assert_eq!(row0.len(), m.col_blocks);
+
+        // Test mutable row access
+        let mut m_mut = m.clone();
+        {
+            let row1 = m_mut.row_mut(1);
+            // Modify the row (this is at the BitVec level)
+            if row1.len() > 0 {
+                row1[0] ^= MSB_ON; // Flip the first bit
+            }
+        }
+        // The matrix should be modified
+        assert_ne!(m_mut[(1, 0)], m[(1, 0)]);
+    }
+
+    #[test]
+    fn test_transpose_inplace_rectangular_matrices() {
+        let mut rng = SmallRng::seed_from_u64(665544);
+
+        // Test various rectangular matrix dimensions
+        let test_cases = [
+            (1, 5),
+            (5, 1),
+            (3, 7),
+            (7, 3),
+            (10, 20),
+            (20, 10),
+            (32, 64),
+            (64, 32),
+            (63, 65),
+            (65, 63),
+            (100, 200),
+            (200, 100),
+            (128, 256),
+            (256, 128),
+        ];
+
+        for (rows, cols) in test_cases {
+            let original = BitMatrix::random(&mut rng, rows, cols);
+            let expected = original.transposed();
+            let mut actual = original.clone();
+            actual.transpose_inplace();
+
+            assert_eq!(actual.rows(), cols);
+            assert_eq!(actual.cols(), rows);
+            assert_eq!(actual, expected, "Failed for {}x{} matrix", rows, cols);
+
+            // Double transpose should give original
+            actual.transpose_inplace();
+            assert_eq!(
+                actual, original,
+                "Double transpose failed for {}x{}",
+                rows, cols
+            );
+        }
     }
 }

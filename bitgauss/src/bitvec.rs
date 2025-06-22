@@ -388,6 +388,11 @@ impl BitVec {
         self.0.reserve(additional);
     }
 
+    /// Push a new block to the end of the vector
+    pub fn push_block(&mut self, block: BitBlock) {
+        self.0.push(block);
+    }
+
     /// Extends a [`BitVec`] with the contents of a [`BitSlice`]
     pub fn extend_from_slice(&mut self, other: &BitSlice) {
         self.0.extend_from_slice(&other.0);
