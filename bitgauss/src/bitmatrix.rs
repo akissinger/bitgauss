@@ -299,7 +299,12 @@ impl BitMatrix {
 
     /// Performs gaussian elimination while also performing matching row operations on `proxy`
     /// and returns a vector of pivot columns.
-    fn gauss_helper(&mut self, full: bool, proxy: &mut impl RowOps) -> Vec<usize> {
+    fn gauss_helper(
+        &mut self,
+        full: bool,
+        blocksize: usize,
+        proxy: &mut impl RowOps,
+    ) -> Vec<usize> {
         let mut row = 0;
         let mut pcol = 0;
         let mut pcols = vec![];
@@ -360,13 +365,26 @@ impl BitMatrix {
     /// just returns echelon form.
     #[inline]
     pub fn gauss(&mut self, full: bool) {
-        self.gauss_helper(full, &mut ());
+        self.gauss_helper(full, 1, &mut ());
+    }
+
+    /// Performs gaussian elimination with a `blocksize` and a `proxy`
+    ///
+    /// # Arguments
+    /// - `full`: if this is true, compute reduced echelon form
+    /// - `blocksize`: a Patel-Markov-Hayes blocksize. This can be set to reduce the total number of
+    ///    row operations
+    /// - `proxy`: a struct that implements [`RowOps`] and receives the same row operations as the
+    ///   matrix being reduced. This can be used e.g. for reversible logic circuit synthesis
+    #[inline]
+    pub fn gauss_with_proxy(&mut self, full: bool, blocksize: usize, proxy: &mut impl RowOps) {
+        self.gauss_helper(full, blocksize, proxy);
     }
 
     /// Computes the rank of the matrix using gaussian elimination
     #[inline]
     pub fn rank(&self) -> usize {
-        self.clone().gauss_helper(false, &mut ()).len()
+        self.clone().gauss_helper(false, 1, &mut ()).len()
     }
 
     /// Computes the inverse of the matrix if it is invertible, otherwise returns an error
@@ -375,7 +393,7 @@ impl BitMatrix {
             return Err(BitMatrixError("Matrix must be square".to_string()));
         }
         let mut inv = BitMatrix::identity(self.cols());
-        let pcols = self.clone().gauss_helper(true, &mut inv);
+        let pcols = self.clone().gauss_helper(true, 1, &mut inv);
 
         if pcols.len() != self.cols() {
             return Err(BitMatrixError("Matrix is not invertible".to_string()));
@@ -535,7 +553,7 @@ impl BitMatrix {
         }
 
         let mut m = self.clone();
-        let pivot_cols = m.gauss_helper(true, &mut ());
+        let pivot_cols = m.gauss_helper(true, 1, &mut ());
         let mut free_vars = Vec::with_capacity(self.cols() - pivot_cols.len());
         let mut it = pivot_cols.iter().peekable();
 
