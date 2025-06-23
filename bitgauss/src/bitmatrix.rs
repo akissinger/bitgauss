@@ -1,5 +1,5 @@
 use crate::bitvec::*;
-use rand::Rng;
+use rand::{rand_core::block, Rng};
 use std::{
     fmt,
     ops::{Index, Mul},
@@ -310,12 +310,14 @@ impl BitMatrix {
     fn gauss_helper(
         &mut self,
         full: bool,
-        blocksize: usize,
+        chunksize: usize,
         proxy: &mut impl RowOps,
     ) -> Vec<usize> {
         let mut row = 0;
         let mut pcol = 0;
         let mut pcols = vec![];
+        let mut chunk = 0;
+        let blocksize = usize::min(chunksize, BLOCKSIZE);
         while row < self.rows() {
             let mut next_row = None;
             'outer: while pcol < self.cols() {
@@ -332,6 +334,20 @@ impl BitMatrix {
                 if row != row1 {
                     self.swap_rows(row, row1);
                     proxy.swap_rows(row, row1);
+                }
+
+                if blocksize > 1 {
+                    if chunk == 0 || pcol >= chunk + blocksize {
+                        // eliminate duplicate rows below "row" in the current chunk
+                        let lower_block = chunk / BLOCKSIZE;
+                        let upper_block = if (chunk + blocksize) % BLOCKSIZE == 0 {
+                            lower_block
+                        } else {
+                            (chunk + blocksize) / BLOCKSIZE
+                        };
+
+                        let lower_mask = 0; // TODO continue from here...
+                    }
                 }
 
                 let row_vec = self.row(row).to_vec();
@@ -385,8 +401,8 @@ impl BitMatrix {
     /// - `proxy`: a struct that implements [`RowOps`] and receives the same row operations as the
     ///   matrix being reduced. This can be used e.g. for reversible logic circuit synthesis
     #[inline]
-    pub fn gauss_with_proxy(&mut self, full: bool, blocksize: usize, proxy: &mut impl RowOps) {
-        self.gauss_helper(full, blocksize, proxy);
+    pub fn gauss_with_proxy(&mut self, full: bool, chunksize: usize, proxy: &mut impl RowOps) {
+        self.gauss_helper(full, chunksize, proxy);
     }
 
     /// Computes the rank of the matrix using gaussian elimination
