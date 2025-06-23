@@ -297,6 +297,14 @@ impl BitMatrix {
         self.transpose_helper(None);
     }
 
+    /// Returns the number of 1s in the given row
+    #[inline]
+    pub fn row_weight(&self, row: usize) -> usize {
+        self.data
+            .bit_range(row * self.col_blocks, (row + 1) * self.col_blocks)
+            .count_ones()
+    }
+
     /// Performs gaussian elimination while also performing matching row operations on `proxy`
     /// and returns a vector of pivot columns.
     fn gauss_helper(

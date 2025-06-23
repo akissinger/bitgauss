@@ -117,14 +117,14 @@ impl BitSlice {
 
     /// Counts the number of bits set to 1 in the entire range.
     #[inline]
-    pub fn count_ones(&self) -> u32 {
-        self.block_iter().fold(0, |c, bits| c + bits.count_ones())
+    pub fn count_ones(&self) -> usize {
+        self.block_iter().fold(0, |c, bits| c + bits.count_ones()) as usize
     }
 
     /// Counts the number of bits set to 0 in the entire range.
     #[inline]
-    pub fn count_zeros(&self) -> u32 {
-        self.block_iter().fold(0, |c, bits| c + bits.count_zeros())
+    pub fn count_zeros(&self) -> usize {
+        self.block_iter().fold(0, |c, bits| c + bits.count_zeros()) as usize
     }
 
     /// Computes the dot product (mod 2) of two [`BitSlice`]s.
@@ -315,13 +315,13 @@ impl BitVec {
 
     /// Counts the number of bits set to 1 in the entire vector.
     #[inline]
-    pub fn count_ones(&self) -> u32 {
+    pub fn count_ones(&self) -> usize {
         self.deref().count_ones()
     }
 
     /// Counts the number of bits set to 0 in the entire vector.
     #[inline]
-    pub fn count_zeros(&self) -> u32 {
+    pub fn count_zeros(&self) -> usize {
         self.deref().count_zeros()
     }
 
