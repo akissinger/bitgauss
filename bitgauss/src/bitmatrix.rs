@@ -340,13 +340,17 @@ impl BitMatrix {
 
                 if chunksize > 1 {
                     // eliminate duplicate rows below "row" in the current chunk
-                    if pcol >= chunk_end {
+                    while pcol >= chunk_end {
                         // compute the current `BitBlock` and start/end indices within the block
                         // for this chunk
                         let col_block = chunk / BLOCKSIZE;
                         let i0 = chunk % BLOCKSIZE;
                         let i1 = usize::min(i0 + chunksize, BLOCKSIZE);
                         chunk_end = col_block * BLOCKSIZE + i1;
+
+                        if pcol >= chunk_end {
+                            continue;
+                        }
 
                         // bitmask to catch the current chunk
                         let mask = BitBlock::MAX.wrapping_shr(i0 as u32)
