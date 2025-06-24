@@ -1,4 +1,4 @@
-use crate::bitvec::{BLOCKSIZE, BitBlock, BitSlice, BitVec, MSB_ON, min_blocks};
+use crate::bitvec::{min_blocks, BitBlock, BitSlice, BitVec, BLOCKSIZE, MSB_ON};
 use rand::Rng;
 use std::{
     fmt,
@@ -387,9 +387,9 @@ impl BitMatrix {
     }
 
     /// Computes the inverse of the matrix if it is invertible, otherwise returns an error
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// If the matrix is not invertible. This includes the possibilities of not being square and having rank too small.
     pub fn try_inverse(&self) -> Result<Self, BitMatrixError> {
         if self.rows() != self.cols() {
@@ -406,9 +406,9 @@ impl BitMatrix {
     }
 
     /// Computes the inverse of an invertible matrix
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// If the matrix is not invertible. This includes the possibilities of not being square and having rank too small.
     pub fn inverse(&self) -> Self {
         self.try_inverse().unwrap()
@@ -417,7 +417,7 @@ impl BitMatrix {
     /// Tries to multiply two matrices and returns the result
     ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if the matrices have incompatible dimensions
     pub fn try_mul(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.cols() != other.rows() {
@@ -447,9 +447,9 @@ impl BitMatrix {
     /// Try to vertically stack this matrix with another one and returns the result
     ///
     /// The resulting matrix will have the minimal column padding.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if the matrices have different numbers of columns.
     pub fn try_vstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.cols() != other.cols() {
@@ -484,18 +484,18 @@ impl BitMatrix {
     }
 
     /// Vertically stacks this matrix with another one and returns the result
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Returns an error if the matrices have different numbers of columns.
     pub fn vstack(&self, other: &Self) -> Self {
         self.try_vstack(other).unwrap()
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if the matrices have different numbers of rows.
     pub fn try_hstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.rows() != other.rows() {
@@ -538,9 +538,9 @@ impl BitMatrix {
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Returns an error if the matrices have different numbers of rows.
     pub fn hstack(&self, other: &Self) -> Self {
         self.try_hstack(other).unwrap()

@@ -1,9 +1,10 @@
-#![allow(clippy::must_use_candidate,
+#![allow(
+    clippy::must_use_candidate,
     clippy::return_self_not_must_use,
     clippy::needless_pass_by_value,
     clippy::missing_errors_doc,
     clippy::bool_to_int_with_if,
-    clippy::uninlined_format_args,
+    clippy::uninlined_format_args
 )]
 
 use pyo3::exceptions::PyValueError;

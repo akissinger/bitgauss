@@ -401,9 +401,9 @@ impl BitVec {
     /// Extends a [`BitVec`] with the contents of a [`BitSlice`], left-shifting the bits in each block
     ///
     /// Note this method assumes that the last `shift` bits in `self` are zero
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// the shift must be less than the block size and `self` cannot be empty
     pub fn extend_from_slice_left_shifted(&mut self, other: &BitSlice, shift: usize) {
         if shift >= BLOCKSIZE {

@@ -1,4 +1,7 @@
-use bitgauss::{bitmatrix::BitMatrix, bitvec::{BitAndAssign, BitBlock, BitVec, BitXorAssign}};
+use bitgauss::{
+    bitmatrix::BitMatrix,
+    bitvec::{BitAndAssign, BitBlock, BitVec, BitXorAssign},
+};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 // use std::hint::black_box;
