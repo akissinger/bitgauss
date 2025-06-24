@@ -439,7 +439,7 @@ impl BitMatrix {
         self.gauss_helper(full, 1, &mut ());
     }
 
-    /// Performs gaussian elimination with a `blocksize` and a `proxy`
+    /// Performs gaussian elimination with a `chunksize` and a `proxy`
     ///
     /// # Arguments
     /// - `full`: if this is true, compute reduced echelon form
@@ -450,6 +450,12 @@ impl BitMatrix {
     #[inline]
     pub fn gauss_with_proxy(&mut self, full: bool, chunksize: usize, proxy: &mut impl RowOps) {
         self.gauss_helper(full, chunksize, proxy);
+    }
+
+    /// Performs gaussian elimination using the Patel-Markov-Hayes algorithm with the given `chunksize`
+    #[inline]
+    pub fn gauss_with_chunksize(&mut self, full: bool, chunksize: usize) {
+        self.gauss_helper(full, chunksize, &mut ());
     }
 
     /// Computes the rank of the matrix using gaussian elimination
