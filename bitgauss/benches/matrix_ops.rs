@@ -1,4 +1,4 @@
-use bitgauss::{bitmatrix::BitMatrix, bitvec::*};
+use bitgauss::{bitmatrix::BitMatrix, bitvec::{BitAndAssign, BitBlock, BitVec, BitXorAssign}};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 // use std::hint::black_box;
@@ -18,7 +18,7 @@ fn bitvec_ops(c: &mut Criterion) {
                 bv.bitxor_assign(&vec2);
             },
             BatchSize::LargeInput,
-        )
+        );
     });
 
     group.bench_function("bitvec_xor_slice", |b| {
@@ -26,7 +26,7 @@ fn bitvec_ops(c: &mut Criterion) {
             || vec3.clone(),
             |bv| bv.xor_range(10, sz + 10, sz - 20),
             BatchSize::LargeInput,
-        )
+        );
     });
 
     group.bench_function("bitvec_and", |b| {
@@ -36,7 +36,7 @@ fn bitvec_ops(c: &mut Criterion) {
                 bv.bitand_assign(&vec2);
             },
             BatchSize::LargeInput,
-        )
+        );
     });
 
     group.bench_function("bitvec_dot", |b| b.iter(|| vec1.dot(&vec2)));
@@ -47,11 +47,11 @@ fn gauss(c: &mut Criterion) {
     let mut rng = SmallRng::seed_from_u64(1);
     let m = BitMatrix::random(&mut rng, 1000, 1000);
     group.bench_function("gauss_utri", |b| {
-        b.iter_batched_ref(|| m.clone(), |m| m.gauss(false), BatchSize::LargeInput)
+        b.iter_batched_ref(|| m.clone(), |m| m.gauss(false), BatchSize::LargeInput);
     });
 
     group.bench_function("gauss_full", |b| {
-        b.iter_batched_ref(|| m.clone(), |m| m.gauss(true), BatchSize::LargeInput)
+        b.iter_batched_ref(|| m.clone(), |m| m.gauss(true), BatchSize::LargeInput);
     });
 }
 
@@ -61,11 +61,11 @@ fn big_gauss(c: &mut Criterion) {
     let mut rng = SmallRng::seed_from_u64(1);
     let m = BitMatrix::random(&mut rng, 10_000, 10_000);
     group.bench_function("big_gauss_utri", |b| {
-        b.iter_batched_ref(|| m.clone(), |m| m.gauss(false), BatchSize::LargeInput)
+        b.iter_batched_ref(|| m.clone(), |m| m.gauss(false), BatchSize::LargeInput);
     });
 
     group.bench_function("big_gauss_full", |b| {
-        b.iter_batched_ref(|| m.clone(), |m| m.gauss(true), BatchSize::LargeInput)
+        b.iter_batched_ref(|| m.clone(), |m| m.gauss(true), BatchSize::LargeInput);
     });
 }
 
@@ -87,19 +87,19 @@ fn transpose(c: &mut Criterion) {
                 }
             },
             BatchSize::LargeInput,
-        )
+        );
     });
 
     group.bench_function("inplace", |b| {
         b.iter_batched_ref(
             || m.clone(),
-            |m| m.transpose_inplace(),
+            BitMatrix::transpose_inplace,
             BatchSize::LargeInput,
-        )
+        );
     });
 
     group.bench_function("copied", |b| {
-        b.iter_batched_ref(|| m.clone(), |m| m.transposed(), BatchSize::LargeInput)
+        b.iter_batched_ref(|| m.clone(), |m| m.transposed(), BatchSize::LargeInput);
     });
 }
 

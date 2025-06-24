@@ -1,4 +1,4 @@
-use crate::bitvec::*;
+use crate::bitvec::{BLOCKSIZE, BitBlock, BitSlice, BitVec, MSB_ON, min_blocks};
 use rand::Rng;
 use std::{
     fmt,
@@ -302,7 +302,7 @@ impl BitMatrix {
     fn gauss_helper(
         &mut self,
         full: bool,
-        blocksize: usize,
+        _blocksize: usize,
         proxy: &mut impl RowOps,
     ) -> Vec<usize> {
         let mut row = 0;
@@ -372,8 +372,7 @@ impl BitMatrix {
     ///
     /// # Arguments
     /// - `full`: if this is true, compute reduced echelon form
-    /// - `blocksize`: a Patel-Markov-Hayes blocksize. This can be set to reduce the total number of
-    ///    row operations
+    /// - `blocksize`: a Patel-Markov-Hayes blocksize. This can be set to reduce the total number of row operations
     /// - `proxy`: a struct that implements [`RowOps`] and receives the same row operations as the
     ///   matrix being reduced. This can be used e.g. for reversible logic circuit synthesis
     #[inline]
@@ -388,6 +387,10 @@ impl BitMatrix {
     }
 
     /// Computes the inverse of the matrix if it is invertible, otherwise returns an error
+    /// 
+    /// # Errors
+    /// 
+    /// If the matrix is not invertible. This includes the possibilities of not being square and having rank too small.
     pub fn try_inverse(&self) -> Result<Self, BitMatrixError> {
         if self.rows() != self.cols() {
             return Err(BitMatrixError("Matrix must be square".to_string()));
@@ -403,12 +406,18 @@ impl BitMatrix {
     }
 
     /// Computes the inverse of an invertible matrix
+    /// 
+    /// # Panics
+    /// 
+    /// If the matrix is not invertible. This includes the possibilities of not being square and having rank too small.
     pub fn inverse(&self) -> Self {
         self.try_inverse().unwrap()
     }
 
     /// Tries to multiply two matrices and returns the result
     ///
+    /// # Errors
+    /// 
     /// Returns an error if the matrices have incompatible dimensions
     pub fn try_mul(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.cols() != other.rows() {
@@ -437,8 +446,11 @@ impl BitMatrix {
 
     /// Try to vertically stack this matrix with another one and returns the result
     ///
-    /// The resulting matrix will have the minimal column padding. Returns an error if the
-    /// matrices have different numbers of columns.
+    /// The resulting matrix will have the minimal column padding.
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if the matrices have different numbers of columns.
     pub fn try_vstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.cols() != other.cols() {
             return Err(BitMatrixError(format!(
@@ -472,11 +484,19 @@ impl BitMatrix {
     }
 
     /// Vertically stacks this matrix with another one and returns the result
+    /// 
+    /// # Panics
+    /// 
+    /// Returns an error if the matrices have different numbers of columns.
     pub fn vstack(&self, other: &Self) -> Self {
         self.try_vstack(other).unwrap()
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if the matrices have different numbers of rows.
     pub fn try_hstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.rows() != other.rows() {
             return Err(BitMatrixError(format!(
@@ -518,6 +538,10 @@ impl BitMatrix {
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
+    /// 
+    /// # Panics
+    /// 
+    /// Returns an error if the matrices have different numbers of rows.
     pub fn hstack(&self, other: &Self) -> Self {
         self.try_hstack(other).unwrap()
     }
@@ -586,7 +610,7 @@ impl BitMatrix {
 }
 
 /// Two matrices are considered equal if they represent the same logical matrix, possibly with different
-/// padding (i.e. col_blocks and row_blocks can be different)
+/// padding (i.e. `col_blocks` and `row_blocks` can be different)
 impl PartialEq for BitMatrix {
     fn eq(&self, other: &Self) -> bool {
         if self.rows() != other.rows() || self.cols() != other.cols() {
@@ -640,7 +664,7 @@ impl RowOps for BitMatrix {
     }
 }
 
-/// Allows indexing into the matrix to return the bit at `(row, col)
+/// Allows indexing into the matrix to return the bit at `(row, col)`
 ///
 /// `matrix[(row, col)]` is equivalent to `matrix.bit(row, col)`. Note this differs from how indexing works for [`BitVec`], which indexes
 /// over [`BitBlock`]s, not individual bits.
@@ -1128,7 +1152,7 @@ mod test {
         {
             let row1 = m_mut.row_mut(1);
             // Modify the row (this is at the BitVec level)
-            if row1.len() > 0 {
+            if !row1.is_empty() {
                 row1[0] ^= MSB_ON; // Flip the first bit
             }
         }
@@ -1138,7 +1162,7 @@ mod test {
 
     #[test]
     fn test_transpose_inplace_rectangular_matrices() {
-        let mut rng = SmallRng::seed_from_u64(665544);
+        let mut rng = SmallRng::seed_from_u64(665_544);
 
         // Test various rectangular matrix dimensions
         let test_cases = [
