@@ -306,6 +306,25 @@ impl BitMatrix {
             .count_ones()
     }
 
+    // get the column block, offsets, and bitmask for a chunk of size `chunksize` containing column `col`
+    #[inline]
+    fn chunk(chunksize: usize, col: usize) -> (usize, usize, usize, BitBlock) {
+        let col_block = col / BLOCKSIZE;
+        let offset = col % BLOCKSIZE;
+        let i0 = col_block * BLOCKSIZE + (offset / chunksize) * chunksize;
+        let i1 = usize::min(i0 + chunksize, BLOCKSIZE);
+        // bitmask to catch the current chunk
+        let mask = BitBlock::MAX.wrapping_shr(i0 as u32)
+            & BitBlock::MAX.wrapping_shl((BLOCKSIZE - i1) as u32);
+
+        (
+            col_block,
+            col_block * BLOCKSIZE + i0,
+            col_block * BLOCKSIZE + i1,
+            mask,
+        )
+    }
+
     /// Performs gaussian elimination while also performing matching row operations on `proxy`
     /// and returns a vector of pivot columns.
     fn gauss_helper(
@@ -317,7 +336,6 @@ impl BitMatrix {
         let mut row = 0;
         let mut pcol = 0;
         let mut pcols = vec![];
-        let mut chunk = 0;
         let mut chunk_end = 0;
         let chunksize = usize::min(chunksize, BLOCKSIZE);
         while row < self.rows() {
@@ -338,41 +356,23 @@ impl BitMatrix {
                     proxy.swap_rows(row, row1);
                 }
 
-                if chunksize > 1 {
-                    // eliminate duplicate rows below "row" in the current chunk
-                    while pcol >= chunk_end {
-                        // compute the current `BitBlock` and start/end indices within the block
-                        // for this chunk
-                        let col_block = chunk / BLOCKSIZE;
-                        let i0 = chunk % BLOCKSIZE;
-                        let i1 = usize::min(i0 + chunksize, BLOCKSIZE);
-                        chunk_end = col_block * BLOCKSIZE + i1;
+                // eliminate duplicate rows below "row" in the current chunk
+                if chunksize > 1 && pcol >= chunk_end {
+                    let (col_block, _, c, mask) = Self::chunk(chunksize, pcol);
+                    chunk_end = c;
+                    let mut seen = FxHashMap::default();
 
-                        if pcol >= chunk_end {
-                            continue;
-                        }
+                    for i in row..self.rows() {
+                        let bits = self.data[i * self.col_blocks + col_block] & mask;
 
-                        // bitmask to catch the current chunk
-                        let mask = BitBlock::MAX.wrapping_shr(i0 as u32)
-                            & BitBlock::MAX.wrapping_shl((BLOCKSIZE - i1) as u32);
-
-                        let mut seen: FxHashMap<BitBlock, usize> = FxHashMap::default();
-
-                        for i in row..self.rows() {
-                            let bits = self.data[i * self.col_blocks + col_block] & mask;
-
-                            if bits != 0 {
-                                if let Some(&prev_row) = seen.get(&bits) {
-                                    // add bits from the previous row to the current row
-                                    self.add_row(prev_row, i);
-                                    proxy.add_row(prev_row, i);
-                                } else {
-                                    seen.insert(bits, i);
-                                }
+                        if bits != 0 {
+                            if let Some(&prev_row) = seen.get(&bits) {
+                                self.add_row(prev_row, i);
+                                proxy.add_row(prev_row, i);
+                            } else {
+                                seen.insert(bits, i);
                             }
                         }
-
-                        chunk = chunk_end;
                     }
                 }
 
@@ -394,8 +394,29 @@ impl BitMatrix {
         }
 
         if full {
+            let mut chunk_start = self.cols();
             for row in (0..pcols.len()).rev() {
                 let pcol = pcols[row];
+
+                // eliminate duplicate rows above "row" in the current chunk
+                if chunksize > 1 && pcol < chunk_start {
+                    let (col_block, c, _, mask) = Self::chunk(chunksize, pcol);
+                    chunk_start = c;
+                    let mut seen = FxHashMap::default();
+                    for i in (0..=row).rev() {
+                        let bits = self.data[i * self.col_blocks + col_block] & mask;
+
+                        if bits != 0 {
+                            if let Some(&prev_row) = seen.get(&bits) {
+                                self.add_row(prev_row, i);
+                                proxy.add_row(prev_row, i);
+                            } else {
+                                seen.insert(bits, i);
+                            }
+                        }
+                    }
+                }
+
                 let row_vec = self.row(row).to_vec();
                 for i in 0..row {
                     if self[(i, pcol)] {
@@ -1253,6 +1274,29 @@ mod test {
         let mut rng = SmallRng::seed_from_u64(665544);
         let chunksize = 7;
         let m = BitMatrix::random(&mut rng, 100, 200);
+        let mut m1 = m.clone();
+        let mut m2 = m.clone();
+        let mut c1 = RowOpsCounter::default();
+        let mut c2 = RowOpsCounter::default();
+        m1.gauss_with_proxy(true, 1, &mut c1);
+        m2.gauss_with_proxy(true, chunksize, &mut c2);
+        assert_eq!(m1, m2, "Gaussian elimination with chunksize failed");
+        println!(
+            "Gaussian elimination with chunksize 1: {} swaps, {} adds",
+            c1.swap_count, c1.add_count
+        );
+        println!(
+            "Gaussian elimination with chunksize {}: {} swaps, {} adds",
+            chunksize, c2.swap_count, c2.add_count
+        );
+    }
+
+    // test PMH on invertible matrices
+    #[test]
+    fn gauss_chunks_inv() {
+        let mut rng = SmallRng::seed_from_u64(665544);
+        let chunksize = 7;
+        let m = BitMatrix::random_invertible(&mut rng, 100);
         let mut m1 = m.clone();
         let mut m2 = m.clone();
         let mut c1 = RowOpsCounter::default();
