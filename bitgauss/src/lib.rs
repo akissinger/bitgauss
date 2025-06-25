@@ -22,8 +22,10 @@
     clippy::return_self_not_must_use,
     clippy::bool_to_int_with_if
 )]
+pub mod binary_codes;
 pub mod bitmatrix;
 pub mod bitvec;
 
+pub use binary_codes::{BinaryLinearCode, HadamardCode};
 pub use bitmatrix::{BitMatrix, RowOps};
 pub use bitvec::{BitBlock, BitSlice, BitVec};

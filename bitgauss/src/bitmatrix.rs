@@ -174,6 +174,21 @@ impl BitMatrix {
         self.cols
     }
 
+    #[inline]
+    pub(crate) fn row_vector(cols: usize, mut single_row: BitVec) -> Self {
+        if single_row.num_bits() < cols {
+            let extra_blocks = min_blocks(cols - single_row.num_bits());
+            single_row.extend_from_slice(&BitVec::zeros(extra_blocks));
+        }
+        let col_blocks = single_row.len();
+        Self {
+            rows: 1,
+            cols,
+            col_blocks,
+            data: single_row,
+        }
+    }
+
     /// Adds (XORs) the bits from a `BitRange` to a specified row
     #[inline]
     pub fn add_bits_to_row(&mut self, bits: &BitSlice, row: usize) {
@@ -558,6 +573,18 @@ impl BitMatrix {
         }
     }
 
+    /// Vertically stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
+    ///
+    /// If the iterator is empty, returns an empty `BitMatrix` with 0 rows and 0 columns.
+    pub fn vstack_from_owned_iter(iter: impl IntoIterator<Item = BitMatrix>) -> Self {
+        let mut it = iter.into_iter();
+        if let Some(first) = it.next() {
+            it.fold(first, |m, n| m.vstack(&n))
+        } else {
+            Self::zeros(0, 0)
+        }
+    }
+
     /// Horizontally stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
     ///
     /// If the iterator is empty, returns an empty `BitMatrix` with 0 rows and 0 columns.
@@ -565,6 +592,18 @@ impl BitMatrix {
         let mut it = iter.into_iter();
         if let Some(first) = it.next() {
             it.fold(first.clone(), |m, n| m.hstack(n))
+        } else {
+            Self::zeros(0, 0)
+        }
+    }
+
+    /// Horizontally stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
+    ///
+    /// If the iterator is empty, returns an empty `BitMatrix` with 0 rows and 0 columns.
+    pub fn hstack_from_owned_iter(iter: impl IntoIterator<Item = BitMatrix>) -> Self {
+        let mut it = iter.into_iter();
+        if let Some(first) = it.next() {
+            it.fold(first, |m, n| m.hstack(&n))
         } else {
             Self::zeros(0, 0)
         }
@@ -606,6 +645,42 @@ impl BitMatrix {
         }
 
         basis
+    }
+
+    /// Pick out a subset of the logical rows
+    ///
+    /// # Errors
+    ///
+    /// Error if any of the rows to be selected are not actually logical rows
+    pub fn select_rows(&self, rows_selected: &[usize]) -> Result<Self, BitMatrixError> {
+        let num_rows = self.rows();
+        if rows_selected.iter().any(|z| *z >= num_rows) {
+            return Err(BitMatrixError(
+                "Trying to select a row which does not exist".to_string(),
+            ));
+        }
+        let num_cols = self.cols();
+        Ok(Self::vstack_from_owned_iter(rows_selected.iter().map(
+            |row_selection| Self::row_vector(num_cols, self.row(*row_selection).to_vec()),
+        )))
+    }
+
+    /// Pick out a subset of the logical columns
+    ///
+    /// # Errors
+    ///
+    /// Error if any of the columns to be selected are not actually logical columns
+    pub fn select_cols(&self, cols_selected: &[usize]) -> Result<Self, BitMatrixError> {
+        let num_cols = self.cols();
+        if cols_selected.iter().any(|z| *z >= num_cols) {
+            return Err(BitMatrixError(
+                "Trying to select a column which does not exist".to_string(),
+            ));
+        }
+        let transposed = self.transposed();
+        let mut transpose_subbed = transposed.select_rows(cols_selected)?;
+        transpose_subbed.transpose_inplace();
+        Ok(transpose_subbed)
     }
 }
 
