@@ -2,7 +2,7 @@ use crate::bitvec::{min_blocks, BitBlock, BitSlice, BitVec, BLOCKSIZE, MSB_ON};
 use rand::Rng;
 use std::{
     fmt,
-    ops::{Index, Mul},
+    ops::{Add, Index, Mul, Neg, Sub},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -420,6 +420,25 @@ impl BitMatrix {
         Ok(inv)
     }
 
+    /// Computes the inverse of the matrix if it is invertible, otherwise returns an error
+    ///
+    /// # Errors
+    ///
+    /// If the matrix is not invertible. This includes the possibilities of not being square and having rank too small.
+    pub fn try_inverted(mut self) -> Result<Self, BitMatrixError> {
+        if self.rows() != self.cols() {
+            return Err(BitMatrixError("Matrix must be square".to_string()));
+        }
+        let mut inv = BitMatrix::identity(self.cols());
+        let pcols = self.gauss_helper(true, 1, &mut inv);
+
+        if pcols.len() != self.cols() {
+            return Err(BitMatrixError("Matrix is not invertible".to_string()));
+        }
+
+        Ok(inv)
+    }
+
     /// Computes the inverse of an invertible matrix
     ///
     /// # Panics
@@ -778,6 +797,36 @@ impl Mul for &BitMatrix {
     /// Multiplies two matrices.
     fn mul(self, rhs: Self) -> Self::Output {
         self.try_mul(rhs).unwrap()
+    }
+}
+
+impl Add for &BitMatrix {
+    type Output = BitMatrix;
+    /// Add two matrices.
+    fn add(self, rhs: Self) -> Self::Output {
+        assert_eq!(self.rows(), rhs.rows());
+        assert_eq!(self.cols(), rhs.cols());
+        let mut to_return = self.clone();
+        for row_idx in 0..self.rows() {
+            to_return.add_bits_to_row(rhs.row(row_idx), row_idx);
+        }
+        to_return
+    }
+}
+
+impl Sub for &BitMatrix {
+    type Output = BitMatrix;
+    /// Subtract two matrices.
+    fn sub(self, rhs: Self) -> Self::Output {
+        self + rhs
+    }
+}
+
+impl Neg for &BitMatrix {
+    type Output = BitMatrix;
+    /// Negate a matrix.
+    fn neg(self) -> Self::Output {
+        self.clone()
     }
 }
 
