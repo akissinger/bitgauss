@@ -121,6 +121,12 @@ impl BitSlice {
         self.block_iter().fold(0, |c, bits| c + bits.count_ones())
     }
 
+    /// Whether any number of bits set to 1 in the entire range.
+    #[inline]
+    pub fn has_any_ones(&self) -> bool {
+        self.block_iter().any(|bits| bits != 0)
+    }
+
     /// Counts the number of bits set to 0 in the entire range.
     #[inline]
     pub fn count_zeros(&self) -> u32 {

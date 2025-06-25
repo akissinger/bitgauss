@@ -13,12 +13,43 @@ impl std::fmt::Display for ECCError {
 }
 impl std::error::Error for ECCError {}
 
+enum ECCPresentations {
+    JustG(BitMatrix),
+    StandardP(BitMatrix),
+    #[allow(dead_code)]
+    BothGH(BitMatrix,BitMatrix),
+}
+
+impl ECCPresentations {
+    #[allow(dead_code)]
+    fn valid(&self) -> bool {
+        match self {
+            ECCPresentations::JustG(bit_matrix) => {
+                bit_matrix.rows() < bit_matrix.cols()
+            },
+            ECCPresentations::StandardP(_) => {
+                true
+            },
+            ECCPresentations::BothGH(g_matrix, h_matrix) => {
+                let (k_g,n_g) = (g_matrix.rows(), g_matrix.cols());
+                let (n_minus_k_h, n_h)= (h_matrix.rows(), h_matrix.cols());
+                if n_g == n_h && n_minus_k_h + k_g == n_g {
+                    let g_transpose = g_matrix.transposed();
+                    let h_times_g_t = h_matrix * &g_transpose;
+                    h_times_g_t == BitMatrix::zeros(n_minus_k_h, k_g)
+                } else {
+                    false
+                }
+            },
+        }
+    }
+}
+
 pub struct BinaryLinearCode {
-    pub(crate) n_codeword_length: usize,
-    pub(crate) k_codespace_dimension: usize,
-    pub(crate) d_code_distance: usize,
-    pub(crate) g_generator_matrix: BitMatrix,
-    known_is_standard: Option<bool>,
+    n_codeword_length: usize,
+    k_codespace_dimension: usize,
+    d_code_distance: usize,
+    chosen_presentation: ECCPresentations,
 }
 
 impl BinaryLinearCode {
@@ -36,7 +67,62 @@ impl BinaryLinearCode {
                 "the quantity to be encoded did not have the right number of columns".to_owned(),
             ));
         }
-        Ok(to_encode * &self.g_generator_matrix)
+        match &self.chosen_presentation {
+            ECCPresentations::JustG(g_generator_matrix)
+            | ECCPresentations::BothGH(g_generator_matrix, _)
+            => {
+                        Ok(to_encode * g_generator_matrix)
+                    },
+            ECCPresentations::StandardP(p_part_of_g) => {
+                        let left_part = to_encode.clone();
+                        let right_part = to_encode * p_part_of_g;
+                        Ok(BitMatrix::hstack(&left_part, &right_part))
+                    }
+        }
+    }
+
+    /// Each column of `to_decode` represents a bitvector being decoded
+    /// That is to say `to_decode` is `n_codeword_length` by C
+    /// and after decoding we would get a result of `k_codespace_dimension` by C
+    ///
+    /// # Errors
+    ///
+    /// If the number of rows of `to_decode` are incorrect for the dimension
+    /// of the codewords
+    pub fn is_codeword(&self, to_decode: &BitMatrix) -> Result<BitVec, ECCError> {
+        if self.n_codeword_length != to_decode.rows() {
+            return Err(ECCError(
+                "the quantity to be decoded did not have the right number of rows".to_owned(),
+            ));
+        }
+        match &self.chosen_presentation {
+            ECCPresentations::JustG(_) => {
+                Err(ECCError(
+                    "We do not have the check matrix, we need to compute it".to_owned(),
+                ))
+            }
+            ECCPresentations::StandardP(bit_matrix) => {
+                let p_transpose = bit_matrix.transposed();
+                let identity_part = BitMatrix::identity(p_transpose.rows());
+                let full_h = BitMatrix::hstack(&p_transpose, &identity_part);
+                let count_columns = to_decode.cols();
+                let mut to_check_zero_columns = &full_h * to_decode;
+                to_check_zero_columns.transpose_inplace();
+                let to_check_zero_rows = to_check_zero_columns;
+                Ok((0..count_columns).map(|cur_row| {
+                    to_check_zero_rows.row(cur_row).has_any_ones()
+                }).collect())
+            },
+            ECCPresentations::BothGH(_, full_h) => {
+                let count_columns = to_decode.cols();
+                let mut to_check_zero_columns = full_h * to_decode;
+                to_check_zero_columns.transpose_inplace();
+                let to_check_zero_rows = to_check_zero_columns;
+                Ok((0..count_columns).map(|cur_row| {
+                    to_check_zero_rows.row(cur_row).has_any_ones()
+                }).collect())
+            },
+        }
     }
 
     /// the standard `[n,k,d]_q` notation
@@ -60,23 +146,75 @@ impl BinaryLinearCode {
         k_t / n_t
     }
 
-    /// Is the G matrix in standard form with [I | P]
+    /// Is the G matrix in standard form with [I | P]?
+    /// This can be either explicitly as the `StandardP` variant or possibly checking the left block
+    /// to see if it is the identity matrix.
     ///
     /// # Panics
     ///
     /// The `k_codespace_dimension` by `n_codeword_length` matrix `g_generator_matrix`
     /// is assumed to have no more rows than columns
     /// the rate will be `<= 1`
-    pub fn is_standard(&self) -> bool {
-        if let Some(known_is_standard) = self.known_is_standard {
-            return known_is_standard;
+    pub fn is_standard(&self, only_obviously: bool) -> bool {
+        if only_obviously {
+            return matches!(self.chosen_presentation, ECCPresentations::StandardP(_));
         }
-        let cols_selected = (0..self.k_codespace_dimension).collect::<Vec<_>>();
-        let left_block = self
-            .g_generator_matrix
-            .select_cols(&cols_selected)
-            .expect("The matrix has fewer rows than columns by assumption");
-        left_block == BitMatrix::identity(self.k_codespace_dimension)
+        match &self.chosen_presentation {
+            ECCPresentations::JustG(g_generator_matrix)
+            | ECCPresentations::BothGH(g_generator_matrix, _) => {
+                let cols_selected = (0..self.k_codespace_dimension).collect::<Vec<_>>();
+                let left_block = g_generator_matrix
+                    .select_cols(&cols_selected)
+                    .expect("The matrix has fewer rows than columns by assumption");
+                left_block == BitMatrix::identity(self.k_codespace_dimension)
+            },
+            ECCPresentations::StandardP(_) => true,
+        }
+    }
+
+    
+    /// Either give a reference to the `G` matrix in the `Ok` variant
+    /// or reconstruct it from the `P` matrix in the `Err` variant
+    #[allow(clippy::missing_errors_doc)]
+    pub fn g_generator_matrix(&self) -> Result<&BitMatrix,BitMatrix> {
+        match &self.chosen_presentation {
+            ECCPresentations::JustG(bit_matrix)
+            | ECCPresentations::BothGH(bit_matrix,_) => Ok(bit_matrix),
+            ECCPresentations::StandardP(bit_matrix) => {
+                Err(BitMatrix::hstack(&BitMatrix::identity(self.k_codespace_dimension), bit_matrix))
+            },
+        }
+    }
+
+    #[allow(clippy::missing_panics_doc)]
+    pub fn standardize(self) -> Self {
+        if self.is_standard(true) {
+            return self;
+        }
+        match self.chosen_presentation {
+            ECCPresentations::JustG(mut bit_matrix)
+            | ECCPresentations::BothGH(mut bit_matrix, _)
+            => {
+                let pivot_cols = bit_matrix.gauss(true);
+                let num_cols = bit_matrix.cols();
+                let chosen_presentation = if pivot_cols.len() == self.k_codespace_dimension {
+                    let cols_for_p_selected = (0..num_cols).filter(|z| !pivot_cols.contains(z)).collect::<Vec<_>>();
+                    let p_matrix = bit_matrix.select_cols(&cols_for_p_selected).expect("Manifestly all within range of logical columns");
+                    ECCPresentations::StandardP(p_matrix)
+                } else {
+                    ECCPresentations::JustG(bit_matrix)
+                };
+                Self {
+                    n_codeword_length: self.n_codeword_length,
+                    k_codespace_dimension: self.k_codespace_dimension,
+                    d_code_distance: self.d_code_distance,
+                    chosen_presentation,
+                }
+            }
+            ECCPresentations::StandardP(_) => {
+                unreachable!("Already checked that it was not standard already");
+            }
+        }
     }
 }
 
@@ -133,8 +271,7 @@ impl HadamardCode {
             n_codeword_length,
             k_codespace_dimension,
             d_code_distance: n_codeword_length >> 1,
-            g_generator_matrix,
-            known_is_standard: Some(false),
+            chosen_presentation: ECCPresentations::JustG(g_generator_matrix),
         })
     }
 }
@@ -149,8 +286,8 @@ mod test {
         assert_eq!(cur_had.0.n_codeword_length, 8);
         assert_eq!(cur_had.0.k_codespace_dimension, 3);
         assert_eq!(cur_had.0.d_code_distance, 4);
-        assert_eq!(cur_had.0.g_generator_matrix.rows(), 3);
-        assert_eq!(cur_had.0.g_generator_matrix.cols(), 8);
+        assert_eq!(cur_had.0.g_generator_matrix().expect("Is given as G").rows(), 3);
+        assert_eq!(cur_had.0.g_generator_matrix().expect("Is given as G").cols(), 8);
         let a = [
             [0, 0, 0],
             [0, 0, 1],
@@ -165,13 +302,13 @@ mod test {
             for n_idx in 0..8 {
                 assert_eq!(
                     a[n_idx][k_idx] == 1,
-                    cur_had.0.g_generator_matrix.bit(k_idx, n_idx),
+                    cur_had.0.g_generator_matrix().expect("Is given as G").bit(k_idx, n_idx),
                     "G[{k_idx}{n_idx}]"
                 );
             }
         }
         assert_eq!(
-            cur_had.0.g_generator_matrix,
+            *cur_had.0.g_generator_matrix().expect("Is given as G"),
             BitMatrix::build(3, 8, |i, j| a[j][i] == 1)
         );
     }
@@ -182,20 +319,20 @@ mod test {
         assert_eq!(cur_had.0.n_codeword_length, 4);
         assert_eq!(cur_had.0.k_codespace_dimension, 3);
         assert_eq!(cur_had.0.d_code_distance, 2);
-        assert_eq!(cur_had.0.g_generator_matrix.rows(), 3);
-        assert_eq!(cur_had.0.g_generator_matrix.cols(), 4);
+        assert_eq!(cur_had.0.g_generator_matrix().expect("Is given as G").rows(), 3);
+        assert_eq!(cur_had.0.g_generator_matrix().expect("Is given as G").cols(), 4);
         let a = [[1, 0, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]];
         for k_idx in 0..3 {
             for n_idx in 0..4 {
                 assert_eq!(
                     a[n_idx][k_idx] == 1,
-                    cur_had.0.g_generator_matrix.bit(k_idx, n_idx),
+                    cur_had.0.g_generator_matrix().expect("Is given as G").bit(k_idx, n_idx),
                     "G[{k_idx}{n_idx}]"
                 );
             }
         }
         assert_eq!(
-            cur_had.0.g_generator_matrix,
+            *cur_had.0.g_generator_matrix().expect("Is given as G"),
             BitMatrix::build(3, 4, |i, j| a[j][i] == 1)
         );
     }

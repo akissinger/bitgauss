@@ -379,8 +379,8 @@ impl BitMatrix {
     /// If `full` is true, then perform full Gauss-Jordan to produce reduced echelon form, otherwise
     /// just returns echelon form.
     #[inline]
-    pub fn gauss(&mut self, full: bool) {
-        self.gauss_helper(full, 1, &mut ());
+    pub fn gauss(&mut self, full: bool) -> Vec<usize> {
+        self.gauss_helper(full, 1, &mut ())
     }
 
     /// Performs gaussian elimination with a `blocksize` and a `proxy`
