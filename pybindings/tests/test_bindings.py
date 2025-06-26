@@ -476,6 +476,26 @@ class TestBitMatrixIntegration:
         double_transpose = transposed.transposed()
         assert double_transpose == matrix
 
+    def test_readme(self):
+        """Test the example code in README.md"""
+
+        # Construct a 300x400 matrix whose entries are given by the bool-valued function
+        m1 = BitMatrix.build(300, 400, lambda i, j: (i + j) % 2 == 0)
+
+        # Construct a random 80x300 matrix with an optional random seed
+        m2 = BitMatrix.random(80, 300, seed=1)
+
+        # Construct a random invertible 300x300 matrix
+        m3 = BitMatrix.random_invertible(300, seed=1)
+
+        m4 = m2 * m3           # Matrix multiplication
+        m3_inv = m3.inverse()  # Returns the inverse
+        m1_t = m1.transposed() # Returns transpose
+        m1.transpose_inplace() # Transpose inplace (padding if necessary)
+        m1.gauss()             # Transform to row-echelon form
+        m1.gauss(full=True)    # Transform to reduced row-echelon form
+        ns = m1.nullspace()    # Returns a spanning set for the nullspace
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

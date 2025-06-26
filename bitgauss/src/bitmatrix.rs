@@ -1331,4 +1331,27 @@ mod test {
             );
         }
     }
+
+    // test the example code in README.md
+    #[test]
+    fn readme() {
+        let mut rng = SmallRng::seed_from_u64(1);
+
+        // Construct a 300x400 matrix whose entries are given by the bool-valued function
+        let mut m1 = BitMatrix::build(300, 400, |i, j| (i + j) % 2 == 0);
+
+        // Construct a random 80x300 matrix using the given random number generator
+        let m2 = BitMatrix::random(&mut rng, 80, 300);
+
+        // Construct a random invertible 300x300 matrix
+        let m3 = BitMatrix::random_invertible(&mut rng, 300);
+
+        let _m4 = &m2 * &m3; // Matrix multiplication
+        let _m2_inv = m3.inverse(); // Returns the inverse
+        let _m1_t = m1.transposed(); // Returns transpose
+        m1.transpose_inplace(); // Transpose inplace (padding if necessary)
+        m1.gauss(false); // Transform to row-echelon form
+        m1.gauss(true); // Transform to reduced row-echelon form
+        let _ns = m1.nullspace(); // Returns a spanning set for the nullspace
+    }
 }
