@@ -306,7 +306,11 @@ impl BitMatrix {
             .count_ones()
     }
 
-    // get the column block, offsets, and bitmask for a chunk of size `chunksize` containing column `col`
+    /// Helper function for Patel-Markov-Hayes algorithm
+    ///
+    /// Get the current "chunk", i.e. set of columns of size `chunksize` that the given `col` is contained
+    /// in. Return this as inclusive start index, exclusive end index, column block, and bitmask. If the
+    /// `chunksize` doesn't divide `BLOCKSIZE`, the last chunk in a block will be truncated to fit.
     #[inline]
     fn chunk(chunksize: usize, col: usize) -> (usize, usize, usize, BitBlock) {
         let col_block = col / BLOCKSIZE;
@@ -318,9 +322,9 @@ impl BitMatrix {
             & BitBlock::MAX.wrapping_shl((BLOCKSIZE - i1) as u32);
 
         (
-            col_block,
             col_block * BLOCKSIZE + i0,
             col_block * BLOCKSIZE + i1,
+            col_block,
             mask,
         )
     }
@@ -358,7 +362,7 @@ impl BitMatrix {
 
                 // eliminate duplicate rows below "row" in the current chunk
                 if chunksize > 1 && pcol >= chunk_end {
-                    let (col_block, _, c, mask) = Self::chunk(chunksize, pcol);
+                    let (_, c, col_block, mask) = Self::chunk(chunksize, pcol);
                     chunk_end = c;
                     let mut seen = FxHashMap::default();
 
@@ -400,7 +404,7 @@ impl BitMatrix {
 
                 // eliminate duplicate rows above "row" in the current chunk
                 if chunksize > 1 && pcol < chunk_start {
-                    let (col_block, c, _, mask) = Self::chunk(chunksize, pcol);
+                    let (c, _, col_block, mask) = Self::chunk(chunksize, pcol);
                     chunk_start = c;
                     let mut seen = FxHashMap::default();
                     for i in (0..=row).rev() {
@@ -1278,45 +1282,53 @@ mod test {
     #[test]
     fn gauss_chunks() {
         let mut rng = SmallRng::seed_from_u64(665544);
-        let chunksize = 7;
         let m = BitMatrix::random(&mut rng, 100, 200);
         let mut m1 = m.clone();
-        let mut m2 = m.clone();
         let mut c1 = RowOpsCounter::default();
-        let mut c2 = RowOpsCounter::default();
         m1.gauss_with_proxy(true, 1, &mut c1);
-        m2.gauss_with_proxy(true, chunksize, &mut c2);
-        assert_eq!(m1, m2, "Gaussian elimination with chunksize failed");
         println!(
             "Gaussian elimination with chunksize 1: {} swaps, {} adds",
             c1.swap_count, c1.add_count
         );
-        println!(
-            "Gaussian elimination with chunksize {}: {} swaps, {} adds",
-            chunksize, c2.swap_count, c2.add_count
-        );
+
+        for chunksize in [2, 3, 4, 5, 6, 7, 8, 9, 10] {
+            let mut m2 = m.clone();
+            let mut c2 = RowOpsCounter::default();
+            println!("Testing chunksize {}", chunksize);
+            // Perform Gaussian elimination with the given chunksize
+            m2.gauss_with_proxy(true, chunksize, &mut c2);
+            assert_eq!(m1, m2, "Gaussian elimination with chunksize failed");
+            println!(
+                "Gaussian elimination with chunksize {}: {} swaps, {} adds",
+                chunksize, c2.swap_count, c2.add_count
+            );
+        }
     }
 
     // test PMH on invertible matrices
     #[test]
     fn gauss_chunks_inv() {
         let mut rng = SmallRng::seed_from_u64(665544);
-        let chunksize = 7;
         let m = BitMatrix::random_invertible(&mut rng, 100);
         let mut m1 = m.clone();
-        let mut m2 = m.clone();
         let mut c1 = RowOpsCounter::default();
-        let mut c2 = RowOpsCounter::default();
         m1.gauss_with_proxy(true, 1, &mut c1);
-        m2.gauss_with_proxy(true, chunksize, &mut c2);
-        assert_eq!(m1, m2, "Gaussian elimination with chunksize failed");
         println!(
             "Gaussian elimination with chunksize 1: {} swaps, {} adds",
             c1.swap_count, c1.add_count
         );
-        println!(
-            "Gaussian elimination with chunksize {}: {} swaps, {} adds",
-            chunksize, c2.swap_count, c2.add_count
-        );
+
+        for chunksize in [2, 3, 4, 5, 6, 7, 8, 9, 10] {
+            let mut m2 = m.clone();
+            let mut c2 = RowOpsCounter::default();
+            println!("Testing chunksize {}", chunksize);
+            // Perform Gaussian elimination with the given chunksize
+            m2.gauss_with_proxy(true, chunksize, &mut c2);
+            assert_eq!(m1, m2, "Gaussian elimination with chunksize failed");
+            println!(
+                "Gaussian elimination with chunksize {}: {} swaps, {} adds",
+                chunksize, c2.swap_count, c2.add_count
+            );
+        }
     }
 }
