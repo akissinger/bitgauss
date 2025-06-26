@@ -4,7 +4,7 @@ members = ["bitgauss", "pybindings"]
 
 [workspace.package]
 authors = ["Aleks Kissinger <aleks0@gmail.com>"]
-version = "0.3.1"
+version = "0.3.2"
 keywords = ["linear-algebra", "matrix", "bits"]
 categories = ["science"]
 homepage = "https://github.com/akissinger/bitgauss"
