@@ -25,7 +25,9 @@
 pub mod binary_codes;
 pub mod bitmatrix;
 pub mod bitvec;
+pub mod quantum_ecc;
 
 pub use binary_codes::{BinaryLinearCode, HadamardCode};
 pub use bitmatrix::{BitMatrix, RowOps};
 pub use bitvec::{BitBlock, BitSlice, BitVec};
+pub use quantum_ecc::{F2nSymplectic, PauliString, SGenerators};

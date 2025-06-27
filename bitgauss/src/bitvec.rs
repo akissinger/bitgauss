@@ -1,7 +1,10 @@
 use rand::Rng;
 use ref_cast::RefCast;
-use std::fmt;
 pub use std::ops::{BitAndAssign, BitXorAssign, Deref, DerefMut, Index, IndexMut, Range};
+use std::{
+    fmt,
+    ops::{BitOrAssign, Not},
+};
 
 /// A block of bits. This is an alias for [`u64`]
 pub type BitBlock = u64;
@@ -482,6 +485,26 @@ impl BitXorAssign<&Self> for BitSlice {
         for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
             *bits0 ^= bits1;
         }
+    }
+}
+
+impl BitOrAssign<&Self> for BitSlice {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: &BitSlice) {
+        for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
+            *bits0 |= bits1;
+        }
+    }
+}
+
+impl Not for BitVec {
+    type Output = Self;
+
+    fn not(mut self) -> Self::Output {
+        self.0.iter_mut().for_each(|bits| {
+            *bits = !*bits;
+        });
+        self
     }
 }
 
