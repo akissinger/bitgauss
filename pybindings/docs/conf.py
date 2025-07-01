@@ -1,4 +1,5 @@
 import bitgauss
+import importlib.metadata
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -11,7 +12,7 @@ import bitgauss
 project = 'bitgauss'
 copyright = '2025, Aleks Kissinger'
 author = 'Aleks Kissinger'
-release = '0.3.2'
+release = importlib.metadata.version('bitgauss')
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
