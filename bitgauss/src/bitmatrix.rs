@@ -81,6 +81,24 @@ impl BitMatrix {
         }
     }
 
+    /// Creates a new `BitMatrix` from a vector of bool vectors
+    pub fn from_bool_vec(data: &Vec<Vec<bool>>) -> Self {
+        Self::build(
+            data.len(),
+            if data.is_empty() { 0 } else { data[0].len() },
+            |i, j| data[i][j],
+        )
+    }
+
+    /// Creates a new `BitMatrix` from a vector of integer vectors
+    pub fn from_int_vec(data: &Vec<Vec<usize>>) -> Self {
+        Self::build(
+            data.len(),
+            if data.is_empty() { 0 } else { data[0].len() },
+            |i, j| data[i][j] != 0,
+        )
+    }
+
     /// Creates a new `BitMatrix` of size `rows` x `cols` with all bits set to 0
     pub fn zeros(rows: usize, cols: usize) -> Self {
         let col_blocks = min_blocks(cols);
@@ -786,6 +804,48 @@ impl Mul for &BitMatrix {
 mod test {
     use super::*;
     use rand::{rngs::SmallRng, SeedableRng};
+
+    // test from_bool_vec
+    #[test]
+    fn test_from_bool_vec() {
+        let data = vec![vec![true, false, true], vec![false, true, false]];
+        let m = BitMatrix::from_bool_vec(&data);
+        assert_eq!(m.rows(), 2);
+        assert_eq!(m.cols(), 3);
+        assert_eq!(m.bit(0, 0), true);
+        assert_eq!(m.bit(0, 1), false);
+        assert_eq!(m.bit(0, 2), true);
+        assert_eq!(m.bit(1, 0), false);
+        assert_eq!(m.bit(1, 1), true);
+        assert_eq!(m.bit(1, 2), false);
+    }
+
+    // test from_int_vec
+    #[test]
+    fn test_from_int_vec() {
+        let data = vec![vec![1, 0, 1], vec![0, 1, 0]];
+        let m = BitMatrix::from_int_vec(&data);
+        assert_eq!(m.rows(), 2);
+        assert_eq!(m.cols(), 3);
+        assert_eq!(m.bit(0, 0), true);
+        assert_eq!(m.bit(0, 1), false);
+        assert_eq!(m.bit(0, 2), true);
+        assert_eq!(m.bit(1, 0), false);
+        assert_eq!(m.bit(1, 1), true);
+        assert_eq!(m.bit(1, 2), false);
+    }
+
+    // test construction from empty vectors
+    #[test]
+    fn test_from_empty_vecs() {
+        let m = BitMatrix::from_bool_vec(&Vec::new());
+        assert_eq!(m.rows(), 0);
+        assert_eq!(m.cols(), 0);
+
+        let m = BitMatrix::from_int_vec(&Vec::new());
+        assert_eq!(m.rows(), 0);
+        assert_eq!(m.cols(), 0);
+    }
 
     #[test]
     fn random_gauss() {
