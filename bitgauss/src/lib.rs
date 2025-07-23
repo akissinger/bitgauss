@@ -14,7 +14,7 @@
 
 #[allow(clippy::needless_range_loop, clippy::suspicious_arithmetic_impl)]
 pub mod bitmatrix;
-pub mod bitvec;
+pub mod data;
 
 pub use bitmatrix::{BitMatrix, RowOps};
-pub use bitvec::{BitBlock, BitSlice, BitVec};
+pub use data::{BitBlock, BitData, BitSlice};

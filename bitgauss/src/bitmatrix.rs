@@ -1,4 +1,4 @@
-use crate::bitvec::*;
+use crate::data::*;
 use rand::Rng;
 use rustc_hash::FxHashMap;
 use std::{
@@ -39,7 +39,7 @@ pub struct BitMatrix {
     col_blocks: usize,
 
     /// a [`BitVec`] containing the data of the matrix, stored in row-major order
-    data: BitVec,
+    data: BitData,
 }
 
 /// A trait for types that can have row operations performed on them
@@ -106,7 +106,7 @@ impl BitMatrix {
             rows,
             cols,
             col_blocks,
-            data: BitVec::zeros(rows * col_blocks),
+            data: BitData::zeros(rows * col_blocks),
         }
     }
 
@@ -218,7 +218,7 @@ impl BitMatrix {
         let row_blocks = min_blocks(data_rows);
         if data_rows != row_blocks * BLOCKSIZE || row_blocks != self.col_blocks {
             let blocks = usize::max(row_blocks, self.col_blocks);
-            let mut data = BitVec::with_capacity(BLOCKSIZE * blocks * blocks);
+            let mut data = BitData::with_capacity(BLOCKSIZE * blocks * blocks);
             for i in 0..(BLOCKSIZE * blocks) {
                 for j in 0..blocks {
                     data.push_block(if i < self.rows() && j < self.col_blocks {
@@ -548,7 +548,7 @@ impl BitMatrix {
         }
 
         let rows = self.rows() + other.rows();
-        let mut data = BitVec::with_capacity(rows * self.col_blocks);
+        let mut data = BitData::with_capacity(rows * self.col_blocks);
         let col_blocks = min_blocks(self.cols());
 
         data.reserve(rows * col_blocks);
@@ -586,7 +586,7 @@ impl BitMatrix {
         }
 
         let cols = self.cols() + other.cols();
-        let mut data = BitVec::with_capacity(self.rows * min_blocks(cols));
+        let mut data = BitData::with_capacity(self.rows * min_blocks(cols));
         let col_blocks = min_blocks(cols);
         let self_col_blocks = min_blocks(self.cols());
         let other_col_blocks = min_blocks(other.cols());

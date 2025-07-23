@@ -1,4 +1,4 @@
-use bitgauss::{bitmatrix::BitMatrix, bitvec::*};
+use bitgauss::{bitmatrix::BitMatrix, data::*};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 // use std::hint::black_box;
@@ -7,9 +7,9 @@ fn bitvec_ops(c: &mut Criterion) {
     let mut group = c.benchmark_group("bitvec_ops");
     let sz = 1563; // ~100K bits
     let mut rng = SmallRng::seed_from_u64(1);
-    let vec1: BitVec = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
-    let vec2: BitVec = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
-    let vec3: BitVec = (0..(2 * sz)).map(|_| rng.random::<BitBlock>()).collect();
+    let vec1: BitData = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
+    let vec2: BitData = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
+    let vec3: BitData = (0..(2 * sz)).map(|_| rng.random::<BitBlock>()).collect();
 
     group.bench_function("bitvec_xor", |b| {
         b.iter_batched_ref(
