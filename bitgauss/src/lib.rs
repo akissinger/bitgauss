@@ -14,6 +14,7 @@
 
 #[allow(clippy::needless_range_loop, clippy::suspicious_arithmetic_impl)]
 pub mod bitmatrix;
+pub mod bitvector;
 pub mod data;
 
 pub use bitmatrix::{BitMatrix, RowOps};
