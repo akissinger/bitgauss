@@ -178,3 +178,20 @@ impl Index<usize> for BitVector {
         }
     }
 }
+
+impl From<BitVector> for BitMatrix {
+    fn from(vector: BitVector) -> Self {
+        vector.0
+    }
+}
+
+impl TryFrom<BitMatrix> for BitVector {
+    type Error = &'static str;
+
+    fn try_from(matrix: BitMatrix) -> Result<Self, Self::Error> {
+        if matrix.rows() != 1 {
+            return Err("Cannot convert BitMatrix to BitVector unless it has exactly one row");
+        }
+        Ok(BitVector(matrix))
+    }
+}
