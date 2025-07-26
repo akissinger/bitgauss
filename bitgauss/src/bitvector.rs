@@ -4,9 +4,9 @@ use std::ops::{BitXor, BitXorAssign, Index, Mul};
 
 /// A wrapper around a one-row `BitMatrix`
 ///
-/// By default, this behaves like a column vector for the purposes of matrix multiplication.
-/// To multiply as a row vector, first perform the (cheap) conversion into a one-row
-/// `BitMatrix` via BitMatrix::from(v).
+/// Despite storing bits in row-major order, this struct behaves like a column vector for the
+/// purposes of matrix multiplication. To multiply as a row vector instead, use
+/// `BitVector::as_row_vector()`.
 #[derive(Clone, Debug)]
 pub struct BitVector(BitMatrix);
 
@@ -95,6 +95,19 @@ impl BitVector {
     #[inline]
     pub fn as_mut_slice(&mut self) -> &mut crate::data::BitSlice {
         self.0.row_mut(0)
+    }
+
+    /// Returns a reference to the underlying `BitMatrix`
+    #[inline]
+    pub fn as_matrix(&self) -> &BitMatrix {
+        &self.0
+    }
+
+    /// Alias for `as_matrix`, emphasizing that the `BitVector` is being treated as a
+    /// row vector, e.g. for matrix multiplication
+    #[inline]
+    pub fn as_row_vector(&self) -> &BitMatrix {
+        &self.0
     }
 }
 
