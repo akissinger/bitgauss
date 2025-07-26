@@ -1,8 +1,12 @@
 use crate::bitmatrix::BitMatrix;
 use std::fmt;
-use std::ops::{BitXor, BitXorAssign, Index};
+use std::ops::{BitXor, BitXorAssign, Index, Mul};
 
 /// A wrapper around a one-row `BitMatrix`
+///
+/// By default, this behaves like a column vector for the purposes of matrix multiplication.
+/// To multiply as a row vector, first perform the (cheap) conversion into a one-row
+/// `BitMatrix` via BitMatrix::from(v).
 #[derive(Clone, Debug)]
 pub struct BitVector(BitMatrix);
 
@@ -75,6 +79,9 @@ impl BitVector {
     /// XORs another `BitVector` into this one
     #[inline]
     pub fn xor_with(&mut self, other: &BitVector) {
+        if self.len() != other.len() {
+            panic!("BitVectors must have the same length for XOR");
+        }
         self.0.add_bits_to_row(other.0.row(0), 0);
     }
 
@@ -193,5 +200,96 @@ impl TryFrom<BitMatrix> for BitVector {
             return Err("Cannot convert BitMatrix to BitVector unless it has exactly one row");
         }
         Ok(BitVector(matrix))
+    }
+}
+
+impl Mul<&BitVector> for &BitMatrix {
+    type Output = BitVector;
+
+    fn mul(self, rhs: &BitVector) -> Self::Output {
+        if self.cols() != rhs.len() {
+            panic!("Matrix and vector dimensions do not match for multiplication");
+        }
+        BitVector::build(self.rows(), |i| self.row(i).dot(rhs.as_slice()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{rngs::SmallRng, SeedableRng};
+
+    #[test]
+    fn test_matrix_vector_multiplication() {
+        // Test basic matrix-vector multiplication
+        // [1 0 1]   [1]   [1]
+        // [0 1 1] * [1] = [1]
+        // [1 1 0]   [0]   [0]
+        //
+        // Row 0: 1*1 + 0*1 + 1*0 = 1 + 0 + 0 = 1 (in GF(2))
+        // Row 1: 0*1 + 1*1 + 1*0 = 0 + 1 + 0 = 1 (in GF(2))
+        // Row 2: 1*1 + 1*1 + 0*0 = 1 + 1 + 0 = 0 (in GF(2), since 1⊕1=0)
+        let matrix = BitMatrix::from_bool_vec(&vec![
+            vec![true, false, true],
+            vec![false, true, true],
+            vec![true, true, false],
+        ]);
+        let vector = BitVector::from_bool_vec(&vec![true, true, false]);
+
+        let result = &matrix * &vector;
+        assert_eq!(result.len(), 3);
+        assert!(result[0]); // 1*1 ⊕ 0*1 ⊕ 1*0 = 1
+        assert!(result[1]); // 0*1 ⊕ 1*1 ⊕ 1*0 = 1
+        assert!(!result[2]); // 1*1 ⊕ 1*1 ⊕ 0*0 = 0
+    }
+
+    #[test]
+    fn test_matrix_vector_multiplication_identity() {
+        // Test multiplication with identity matrix
+        let identity = BitMatrix::identity(3);
+        let vector = BitVector::from_bool_vec(&vec![true, false, true]);
+
+        let result = &identity * &vector;
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], true);
+        assert_eq!(result[1], false);
+        assert_eq!(result[2], true);
+    }
+
+    #[test]
+    fn test_matrix_vector_multiplication_zeros() {
+        // Test multiplication with zero matrix
+        let zero_matrix = BitMatrix::zeros(2, 3);
+        let vector = BitVector::from_bool_vec(&vec![true, true, true]);
+
+        let result = &zero_matrix * &vector;
+        assert_eq!(result.len(), 2);
+        assert!(result.is_zero());
+    }
+
+    #[test]
+    #[should_panic(expected = "Matrix and vector dimensions do not match for multiplication")]
+    fn test_matrix_vector_multiplication_dimension_mismatch() {
+        let matrix = BitMatrix::zeros(2, 3);
+        let vector = BitVector::zeros(2); // Wrong dimension
+
+        let _result = &matrix * &vector;
+    }
+
+    #[test]
+    fn test_matrix_vector_multiplication_random() {
+        let mut rng = SmallRng::seed_from_u64(123);
+        let matrix = BitMatrix::random(&mut rng, 5, 7);
+        let vector = BitVector::random(&mut rng, 7);
+
+        let result = &matrix * &vector;
+        assert_eq!(result.len(), 5);
+
+        // Verify the multiplication manually for first row
+        let mut expected_first = false;
+        for j in 0..7 {
+            expected_first ^= matrix.bit(0, j) & vector[j];
+        }
+        assert_eq!(result[0], expected_first);
     }
 }
