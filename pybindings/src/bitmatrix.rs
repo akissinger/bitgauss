@@ -8,7 +8,7 @@ use rand::{rngs::SmallRng, SeedableRng};
 
 #[pyclass(name = "BitMatrix")]
 pub struct PyBitMatrix {
-    inner: BitMatrix,
+    pub(crate) inner: BitMatrix,
 }
 
 #[pymethods]
@@ -366,6 +366,22 @@ impl PyBitMatrix {
     /// Matrix inequality comparison
     pub fn __ne__(&self, other: &PyBitMatrix) -> bool {
         !self.__eq__(other)
+    }
+
+    /// Matrix-vector multiplication with BitVector
+    pub fn matvec(
+        &self,
+        vector: &crate::bitvector::PyBitVector,
+    ) -> PyResult<crate::bitvector::PyBitVector> {
+        if self.inner.cols() != vector.inner.len() {
+            return Err(PyValueError::new_err(format!(
+                "Matrix columns ({}) must match vector length ({}) for multiplication",
+                self.inner.cols(),
+                vector.inner.len()
+            )));
+        }
+        let result = &self.inner * &vector.inner;
+        Ok(crate::bitvector::PyBitVector { inner: result })
     }
 }
 

@@ -18,4 +18,5 @@ pub mod bitvector;
 pub mod data;
 
 pub use bitmatrix::{BitMatrix, RowOps};
+pub use bitvector::BitVector;
 pub use data::{BitBlock, BitData, BitSlice};

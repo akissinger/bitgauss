@@ -220,10 +220,7 @@ impl Mul<&BitVector> for &BitMatrix {
     type Output = BitVector;
 
     fn mul(self, rhs: &BitVector) -> Self::Output {
-        if self.cols() != rhs.len() {
-            panic!("Matrix and vector dimensions do not match for multiplication");
-        }
-        BitVector::build(self.rows(), |i| self.row(i).dot(rhs.as_slice()))
+        self.try_mul_vector(rhs).unwrap()
     }
 }
 
@@ -281,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Matrix and vector dimensions do not match for multiplication")]
+    #[should_panic(expected = "Cannot multiply matrix")]
     fn test_matrix_vector_multiplication_dimension_mismatch() {
         let matrix = BitMatrix::zeros(2, 3);
         let vector = BitVector::zeros(2); // Wrong dimension

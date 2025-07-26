@@ -1,4 +1,4 @@
-use crate::data::*;
+use crate::{data::*, BitVector};
 use rand::Rng;
 use rustc_hash::FxHashMap;
 use std::{
@@ -532,6 +532,23 @@ impl BitMatrix {
         }
 
         Ok(res)
+    }
+
+    /// Tries to multiply with the given `BitVector` (considered as a column vector)
+    /// and returns the result
+    pub fn try_mul_vector(&self, vector: &BitVector) -> Result<BitVector, BitMatrixError> {
+        if self.cols() != vector.len() {
+            return Err(BitMatrixError(format!(
+                "Cannot multiply matrix of dimensions {}x{} with vector of length {}",
+                self.rows(),
+                self.cols(),
+                vector.len()
+            )));
+        }
+
+        Ok(BitVector::build(self.rows(), |i| {
+            self.row(i).dot(vector.as_slice())
+        }))
     }
 
     /// Try to vertically stack this matrix with another one and returns the result

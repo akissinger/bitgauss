@@ -3,12 +3,15 @@
 #![allow(clippy::useless_conversion)]
 
 pub mod bitmatrix;
+pub mod bitvector;
 
 use crate::bitmatrix::PyBitMatrix;
+use crate::bitvector::PyBitVector;
 use pyo3::prelude::*;
 
 #[pymodule]
 fn bitgauss(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBitMatrix>()?;
+    m.add_class::<PyBitVector>()?;
     Ok(())
 }
