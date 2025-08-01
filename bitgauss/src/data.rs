@@ -42,7 +42,7 @@ pub fn min_blocks(bits: usize) -> usize {
 /// ```
 /// use bitgauss::BitData;
 ///
-/// // Create a BitVec of 256 bits, all set to zero
+/// // Create a BitData of 256 bits, all set to zero
 /// let mut bv = BitData::zeros(4);
 /// bv.set_bit(5, true);
 /// assert!(bv.bit(5));
@@ -87,9 +87,9 @@ impl<'a> Iterator for BitIter<'a> {
 pub type BitBlockIter<'a> = std::iter::Copied<std::slice::Iter<'a, BitBlock>>;
 
 impl BitSlice {
-    /// Returns a copy of the range as a [`BitVec`].
+    /// Returns a copy of the range as [`BitData`].
     #[inline]
-    pub fn to_vec(&self) -> BitData {
+    pub fn to_owned(&self) -> BitData {
         self.0.to_vec().into()
     }
 
@@ -202,7 +202,7 @@ impl BitSlice {
         }
     }
 
-    /// Extracts a subrange of bit blocks into a new [`BitVec`].
+    /// Extracts a subrange of bit blocks into a new [`BitData`].
     pub fn extract(&self, start: usize, len: usize) -> BitData {
         BitData(self.0[start..(start + len)].into())
     }
@@ -345,7 +345,7 @@ impl BitData {
         BitSlice::ref_cast_mut(&mut self.0[from_block..to_block])
     }
 
-    /// Constructs a random [`BitVec`] with the specified number of [`BitBlock`]s.
+    /// Constructs a random [`BitData`] with the specified number of [`BitBlock`]s.
     ///
     /// # Arguments
     /// * `rng` - A mutable reference to a random number generator.
@@ -355,7 +355,7 @@ impl BitData {
         (0..num_blocks).map(|_| rng.random::<BitBlock>()).collect()
     }
 
-    /// Constructs a [`BitVec`] with all bits set to zero.
+    /// Constructs a [`BitData`] with all bits set to zero.
     ///
     /// # Arguments
     /// * `num_blocks` - The block size of the new bit vector.
@@ -364,7 +364,7 @@ impl BitData {
         BitData(vec![0; num_blocks])
     }
 
-    /// Constructs a [`BitVec`] with all bits set to one.
+    /// Constructs a [`BitData`] with all bits set to one.
     ///
     /// # Arguments
     /// * `num_blocks` - The block size of the new bit vector.
@@ -373,12 +373,12 @@ impl BitData {
         BitData(vec![BitBlock::MAX; num_blocks])
     }
 
-    /// Constructs a new empty [`BitVec`].
+    /// Constructs a new empty [`BitData`].
     pub fn new() -> Self {
         BitData(Vec::new())
     }
 
-    /// Constructs a new [`BitVec`] with the specified capacity in blocks
+    /// Constructs a new [`BitData`] with the specified capacity in blocks
     pub fn with_capacity(num_blocks: usize) -> Self {
         BitData(Vec::with_capacity(num_blocks))
     }
@@ -393,12 +393,12 @@ impl BitData {
         self.0.push(block);
     }
 
-    /// Extends a [`BitVec`] with the contents of a [`BitSlice`]
+    /// Extends [`BitData`] with the contents of a [`BitSlice`]
     pub fn extend_from_slice(&mut self, other: &BitSlice) {
         self.0.extend_from_slice(&other.0);
     }
 
-    /// Extends a [`BitVec`] with the contents of a [`BitSlice`], left-shifting the bits in each block
+    /// Extends a [`BitData`] with the contents of a [`BitSlice`], left-shifting the bits in each block
     ///
     /// Note this method assumes that the last `shift` bits in `self` are zero
     pub fn extend_from_slice_left_shifted(&mut self, other: &BitSlice, shift: usize) {
@@ -408,7 +408,7 @@ impl BitData {
             self.extend_from_slice(other);
             return;
         } else if self.0.is_empty() {
-            panic!("Cannot append to an empty BitVec with left shift");
+            panic!("Cannot append to an empty BitData with left shift");
         }
 
         self.0.reserve(other.0.len());
@@ -580,7 +580,7 @@ mod test {
         let vec: BitData = bool_vec.clone().into();
         let bool_vec1: Vec<bool> = vec.clone().into();
 
-        // converting to BitVec will pad to a multiple of BLOCKSIZE
+        // converting to BitData will pad to a multiple of BLOCKSIZE
         for (i, &b) in bool_vec.iter().enumerate() {
             assert_eq!((i, vec.bit(i)), (i, b));
             assert_eq!((i, bool_vec1[i]), (i, b));

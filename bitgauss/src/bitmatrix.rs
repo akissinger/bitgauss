@@ -398,7 +398,7 @@ impl BitMatrix {
                     }
                 }
 
-                let row_vec = self.row(row).to_vec();
+                let row_vec = self.row(row).to_owned();
 
                 for i in (row1 + 1)..self.rows() {
                     if self[(i, pcol)] {
@@ -439,7 +439,7 @@ impl BitMatrix {
                     }
                 }
 
-                let row_vec = self.row(row).to_vec();
+                let row_vec = self.row(row).to_owned();
                 for i in 0..row {
                     if self[(i, pcol)] {
                         self.add_bits_to_row(&row_vec, i);
