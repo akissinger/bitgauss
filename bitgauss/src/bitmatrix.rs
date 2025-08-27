@@ -1,5 +1,8 @@
 #![allow(clippy::ptr_arg)]
-use crate::{data::*, BitVector};
+use crate::{
+    data::{min_blocks, BitBlock, BitData, BitSlice, BLOCKSIZE, MSB_ON},
+    BitVector,
+};
 use rand::Rng;
 use rustc_hash::FxHashMap;
 use std::{
@@ -350,7 +353,7 @@ impl BitMatrix {
 
     /// Performs gaussian elimination while also performing matching row operations on `proxy`
     /// and returns a vector of pivot columns.
-    fn gauss_helper(
+    pub(crate) fn gauss_helper(
         &mut self,
         full: bool,
         chunksize: usize,
@@ -546,6 +549,10 @@ impl BitMatrix {
 
     /// Tries to multiply with the given `BitVector` (considered as a column vector)
     /// and returns the result
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrices have incompatible dimensions
     pub fn try_mul_vector(&self, vector: &BitVector) -> Result<BitVector, BitMatrixError> {
         if self.cols() != vector.len() {
             return Err(BitMatrixError(format!(
@@ -607,6 +614,18 @@ impl BitMatrix {
     /// Returns an error if the matrices have different numbers of columns.
     pub fn vstack(&self, other: &Self) -> Self {
         self.try_vstack(other).unwrap()
+    }
+
+    /// Vertically stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
+    ///
+    /// If the iterator is empty, returns an empty `BitMatrix` with 0 rows and 0 columns.
+    pub fn vstack_from_owned_iter(iter: impl IntoIterator<Item = BitMatrix>) -> Self {
+        let mut it = iter.into_iter();
+        if let Some(first) = it.next() {
+            it.fold(first, |acc, next_row| acc.vstack(&next_row))
+        } else {
+            Self::zeros(0, 0)
+        }
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
@@ -723,6 +742,45 @@ impl BitMatrix {
         }
 
         basis
+    }
+
+    /// Pick out a subset of the logical rows
+    ///
+    /// # Errors
+    ///
+    /// Error if any of the rows to be selected are not actually logical rows
+    pub fn select_rows(&self, rows_selected: &[usize]) -> Result<Self, BitMatrixError> {
+        let num_rows = self.rows();
+        if rows_selected.iter().any(|cur_row| *cur_row >= num_rows) {
+            return Err(BitMatrixError(
+                "Trying to select a row which does not exist".to_string(),
+            ));
+        }
+        let num_cols = self.cols();
+        let relevant_rows = rows_selected.iter().map(|cur_row| {
+            let mut cur_row_bitmatrix = BitMatrix::zeros(1, num_cols);
+            cur_row_bitmatrix.add_bits_to_row(self.row(*cur_row), 0);
+            cur_row_bitmatrix
+        });
+        Ok(Self::vstack_from_owned_iter(relevant_rows))
+    }
+
+    /// Pick out a subset of the logical columns
+    ///
+    /// # Errors
+    ///
+    /// Error if any of the columns to be selected are not actually logical columns
+    pub fn select_cols(&self, cols_selected: &[usize]) -> Result<Self, BitMatrixError> {
+        let num_cols = self.cols();
+        if cols_selected.iter().any(|cur_col| *cur_col >= num_cols) {
+            return Err(BitMatrixError(
+                "Trying to select a column which does not exist".to_string(),
+            ));
+        }
+        let transposed = self.transposed();
+        let mut transpose_subbed = transposed.select_rows(cols_selected)?;
+        transpose_subbed.transpose_inplace();
+        Ok(transpose_subbed)
     }
 }
 

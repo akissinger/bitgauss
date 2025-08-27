@@ -79,10 +79,13 @@ impl BitVector {
 
     /// XORs another `BitVector` into this one
     #[inline]
+    #[allow(clippy::missing_panics_doc)]
     pub fn xor_with(&mut self, other: &BitVector) {
-        if self.len() != other.len() {
-            panic!("BitVectors must have the same length for XOR");
-        }
+        assert_eq!(
+            self.len(),
+            other.len(),
+            "BitVectors must have the same length for XOR"
+        );
         self.0.add_bits_to_row(other.0.row(0), 0);
     }
 
@@ -126,7 +129,7 @@ impl fmt::Display for BitVector {
     }
 }
 
-/// XOR operation for BitVector
+/// XOR operation for `BitVector`
 impl BitXor for &BitVector {
     type Output = BitVector;
 
@@ -142,7 +145,7 @@ impl BitXor for &BitVector {
     }
 }
 
-/// XOR operation for owned BitVector
+/// XOR operation for owned `BitVector`
 impl BitXor for BitVector {
     type Output = BitVector;
 
@@ -152,21 +155,21 @@ impl BitXor for BitVector {
     }
 }
 
-/// XOR-assign operation for BitVector
+/// XOR-assign operation for `BitVector`
 impl BitXorAssign<&BitVector> for BitVector {
     fn bitxor_assign(&mut self, rhs: &BitVector) {
         self.xor_with(rhs);
     }
 }
 
-/// XOR-assign operation for owned BitVector
+/// XOR-assign operation for owned `BitVector`
 impl BitXorAssign<BitVector> for BitVector {
     fn bitxor_assign(&mut self, rhs: BitVector) {
         self.xor_with(&rhs);
     }
 }
 
-/// Equality comparison for BitVector
+/// Equality comparison for `BitVector`
 impl PartialEq for BitVector {
     fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {

@@ -1,7 +1,9 @@
 use rand::Rng;
 use ref_cast::RefCast;
 use std::fmt;
-pub use std::ops::{BitAndAssign, BitXorAssign, Deref, DerefMut, Index, IndexMut, Range};
+pub use std::ops::{
+    BitAndAssign, BitOrAssign, BitXorAssign, Deref, DerefMut, Index, IndexMut, Range,
+};
 
 /// A block of bits. This is an alias for [`u64`]
 pub type BitBlock = u64;
@@ -119,6 +121,12 @@ impl BitSlice {
     #[inline]
     pub fn count_ones(&self) -> usize {
         self.block_iter().fold(0, |c, bits| c + bits.count_ones()) as usize
+    }
+
+    /// Whether any number of bits set to 1 in the entire range.
+    #[inline]
+    pub fn has_any_ones(&self) -> bool {
+        self.block_iter().any(|bits| bits != 0)
     }
 
     /// Counts the number of bits set to 0 in the entire range.
@@ -430,6 +438,14 @@ impl BitData {
     pub fn pop(&mut self) -> Option<BitBlock> {
         self.0.pop()
     }
+
+    pub fn negate(&self) -> Self {
+        let mut negated = self.clone();
+        negated
+            .block_iter_mut()
+            .for_each(|cur_block| *cur_block = !*cur_block);
+        negated
+    }
 }
 
 impl fmt::Display for BitData {
@@ -455,6 +471,15 @@ impl BitXorAssign<&Self> for BitSlice {
     fn bitxor_assign(&mut self, rhs: &BitSlice) {
         for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
             *bits0 ^= bits1;
+        }
+    }
+}
+
+impl BitOrAssign<&Self> for BitSlice {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: &BitSlice) {
+        for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
+            *bits0 |= bits1;
         }
     }
 }
@@ -520,6 +545,7 @@ impl DerefMut for BitData {
 
 impl From<Vec<bool>> for BitData {
     fn from(value: Vec<bool>) -> Self {
+        #[allow(clippy::from_iter_instead_of_collect)]
         BitData::from_iter(value.iter().copied())
     }
 }
@@ -527,6 +553,22 @@ impl From<Vec<bool>> for BitData {
 impl From<BitData> for Vec<bool> {
     fn from(value: BitData) -> Self {
         value.iter().collect()
+    }
+}
+
+impl<'a> IntoIterator for &'a BitData {
+    type Item = bool;
+    type IntoIter = BitIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a BitSlice {
+    type Item = bool;
+    type IntoIter = BitIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 

@@ -22,10 +22,14 @@
     clippy::return_self_not_must_use,
     clippy::bool_to_int_with_if
 )]
+pub mod binary_codes;
 pub mod bitmatrix;
 pub mod bitvector;
 pub mod data;
+pub mod quantum_ecc;
 
+pub use binary_codes::{BinaryLinearCode, HadamardCode};
 pub use bitmatrix::{BitMatrix, RowOps};
 pub use bitvector::BitVector;
 pub use data::{BitBlock, BitData, BitSlice};
+pub use quantum_ecc::{F2nSymplectic, PauliString, SGenerators};
