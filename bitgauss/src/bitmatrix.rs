@@ -1,4 +1,8 @@
-use crate::{data::*, BitVector};
+#![allow(clippy::ptr_arg)]
+use crate::{
+    data::{min_blocks, BitBlock, BitData, BitSlice, BLOCKSIZE, MSB_ON},
+    BitVector,
+};
 use rand::Rng;
 use rustc_hash::FxHashMap;
 use std::{
@@ -349,7 +353,7 @@ impl BitMatrix {
 
     /// Performs gaussian elimination while also performing matching row operations on `proxy`
     /// and returns a vector of pivot columns.
-    fn gauss_helper(
+    pub(crate) fn gauss_helper(
         &mut self,
         full: bool,
         chunksize: usize,
@@ -465,8 +469,7 @@ impl BitMatrix {
     ///
     /// # Arguments
     /// - `full`: if this is true, compute reduced echelon form
-    /// - `blocksize`: a Patel-Markov-Hayes blocksize. This can be set to reduce the total number of
-    ///    row operations
+    /// - `blocksize`: a Patel-Markov-Hayes blocksize. This can be set to reduce the total number of row operations
     /// - `proxy`: a struct that implements [`RowOps`] and receives the same row operations as the
     ///   matrix being reduced. This can be used e.g. for reversible logic circuit synthesis
     #[inline]
@@ -487,6 +490,10 @@ impl BitMatrix {
     }
 
     /// Computes the inverse of the matrix if it is invertible, otherwise returns an error
+    ///
+    /// # Errors
+    ///
+    /// If the matrix is not invertible. This includes the possibilities of not being square and having rank too small.
     pub fn try_inverse(&self) -> Result<Self, BitMatrixError> {
         if self.rows() != self.cols() {
             return Err(BitMatrixError("Matrix must be square".to_string()));
@@ -502,11 +509,17 @@ impl BitMatrix {
     }
 
     /// Computes the inverse of an invertible matrix
+    ///
+    /// # Panics
+    ///
+    /// If the matrix is not invertible. This includes the possibilities of not being square and having rank too small.
     pub fn inverse(&self) -> Self {
         self.try_inverse().unwrap()
     }
 
     /// Tries to multiply two matrices and returns the result
+    ///
+    /// # Errors
     ///
     /// Returns an error if the matrices have incompatible dimensions
     pub fn try_mul(&self, other: &Self) -> Result<Self, BitMatrixError> {
@@ -536,6 +549,10 @@ impl BitMatrix {
 
     /// Tries to multiply with the given `BitVector` (considered as a column vector)
     /// and returns the result
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrices have incompatible dimensions
     pub fn try_mul_vector(&self, vector: &BitVector) -> Result<BitVector, BitMatrixError> {
         if self.cols() != vector.len() {
             return Err(BitMatrixError(format!(
@@ -553,8 +570,11 @@ impl BitMatrix {
 
     /// Try to vertically stack this matrix with another one and returns the result
     ///
-    /// The resulting matrix will have the minimal column padding. Returns an error if the
-    /// matrices have different numbers of columns.
+    /// The resulting matrix will have the minimal column padding.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrices have different numbers of columns.
     pub fn try_vstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.cols() != other.cols() {
             return Err(BitMatrixError(format!(
@@ -588,11 +608,31 @@ impl BitMatrix {
     }
 
     /// Vertically stacks this matrix with another one and returns the result
+    ///
+    /// # Panics
+    ///
+    /// Returns an error if the matrices have different numbers of columns.
     pub fn vstack(&self, other: &Self) -> Self {
         self.try_vstack(other).unwrap()
     }
 
+    /// Vertically stacks an iterator of `BitMatrix` instances into a single `BitMatrix`
+    ///
+    /// If the iterator is empty, returns an empty `BitMatrix` with 0 rows and 0 columns.
+    pub fn vstack_from_owned_iter(iter: impl IntoIterator<Item = BitMatrix>) -> Self {
+        let mut it = iter.into_iter();
+        if let Some(first) = it.next() {
+            it.fold(first, |acc, next_row| acc.vstack(&next_row))
+        } else {
+            Self::zeros(0, 0)
+        }
+    }
+
     /// Horizontally stacks this matrix with another one and returns the result
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the matrices have different numbers of rows.
     pub fn try_hstack(&self, other: &Self) -> Result<Self, BitMatrixError> {
         if self.rows() != other.rows() {
             return Err(BitMatrixError(format!(
@@ -634,6 +674,10 @@ impl BitMatrix {
     }
 
     /// Horizontally stacks this matrix with another one and returns the result
+    ///
+    /// # Panics
+    ///
+    /// Returns an error if the matrices have different numbers of rows.
     pub fn hstack(&self, other: &Self) -> Self {
         self.try_hstack(other).unwrap()
     }
@@ -699,10 +743,60 @@ impl BitMatrix {
 
         basis
     }
+
+    /// Pick out a subset of the logical rows
+    ///
+    /// # Errors
+    ///
+    /// Error if any of the rows to be selected are not actually logical rows
+    pub fn select_rows(&self, rows_selected: &[usize]) -> Result<Self, BitMatrixError> {
+        let num_rows = self.rows();
+        if rows_selected.iter().any(|cur_row| *cur_row >= num_rows) {
+            return Err(BitMatrixError(
+                "Trying to select a row which does not exist".to_string(),
+            ));
+        }
+        if rows_selected.is_empty() {
+            return Ok(Self::zeros(0, self.cols()));
+        }
+        if rows_selected.len() == 1 {
+            let mut only_row = BitMatrix::zeros(1, self.cols());
+            only_row.add_bits_to_row(self.row(rows_selected[0]), 0);
+            return Ok(only_row);
+        }
+        let num_cols = self.cols();
+        let relevant_rows = rows_selected.iter().map(|cur_row| {
+            let mut cur_row_bitmatrix = BitMatrix::zeros(1, num_cols);
+            cur_row_bitmatrix.add_bits_to_row(self.row(*cur_row), 0);
+            cur_row_bitmatrix
+        });
+        Ok(Self::vstack_from_owned_iter(relevant_rows))
+    }
+
+    /// Pick out a subset of the logical columns
+    ///
+    /// # Errors
+    ///
+    /// Error if any of the columns to be selected are not actually logical columns
+    pub fn select_cols(&self, cols_selected: &[usize]) -> Result<Self, BitMatrixError> {
+        let num_cols = self.cols();
+        if cols_selected.iter().any(|cur_col| *cur_col >= num_cols) {
+            return Err(BitMatrixError(
+                "Trying to select a column which does not exist".to_string(),
+            ));
+        }
+        if cols_selected.is_empty() {
+            return Ok(Self::zeros(self.rows(), 0));
+        }
+        let transposed = self.transposed();
+        let mut transpose_subbed = transposed.select_rows(cols_selected)?;
+        transpose_subbed.transpose_inplace();
+        Ok(transpose_subbed)
+    }
 }
 
 /// Two matrices are considered equal if they represent the same logical matrix, possibly with different
-/// padding (i.e. col_blocks and row_blocks can be different)
+/// padding (i.e. `col_blocks` and `row_blocks` can be different)
 impl PartialEq for BitMatrix {
     fn eq(&self, other: &Self) -> bool {
         if self.rows() != other.rows() || self.cols() != other.cols() {
@@ -775,7 +869,7 @@ impl RowOps for BitMatrix {
     }
 }
 
-/// Allows indexing into the matrix to return the bit at `(row, col)
+/// Allows indexing into the matrix to return the bit at `(row, col)`
 ///
 /// `matrix[(row, col)]` is equivalent to `matrix.bit(row, col)`. Note this differs from how indexing works for [`BitVec`], which indexes
 /// over [`BitBlock`]s, not individual bits.
@@ -1305,7 +1399,7 @@ mod test {
         {
             let row1 = m_mut.row_mut(1);
             // Modify the row (this is at the BitVec level)
-            if row1.len() > 0 {
+            if !row1.is_empty() {
                 row1[0] ^= MSB_ON; // Flip the first bit
             }
         }

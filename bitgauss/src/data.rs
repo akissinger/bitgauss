@@ -1,7 +1,9 @@
 use rand::Rng;
 use ref_cast::RefCast;
 use std::fmt;
-pub use std::ops::{BitAndAssign, BitXorAssign, Deref, DerefMut, Index, IndexMut, Range};
+pub use std::ops::{
+    BitAndAssign, BitOrAssign, BitXorAssign, Deref, DerefMut, Index, IndexMut, Range,
+};
 
 /// A block of bits. This is an alias for [`u64`]
 pub type BitBlock = u64;
@@ -10,10 +12,10 @@ pub type BitBlock = u64;
 pub const BLOCKSIZE: usize = 64;
 
 /// Bitwise AND with this constant to set most signficant bit to zero
-pub const MSB_OFF: BitBlock = 0x7fffffffffffffff;
+pub const MSB_OFF: BitBlock = 0x7fff_ffff_ffff_ffff;
 
 /// Bitwise OR with this constant to set most signficant bit to one
-pub const MSB_ON: BitBlock = 0x8000000000000000;
+pub const MSB_ON: BitBlock = 0x8000_0000_0000_0000;
 
 /// Returns the minimum number of [`BitBlock`]s required to store the given number of bits.
 ///
@@ -70,7 +72,7 @@ pub struct BitIter<'a> {
     c: usize,
     block: BitBlock,
 }
-impl<'a> Iterator for BitIter<'a> {
+impl Iterator for BitIter<'_> {
     type Item = bool;
     fn next(&mut self) -> Option<Self::Item> {
         if self.c == BLOCKSIZE {
@@ -119,6 +121,12 @@ impl BitSlice {
     #[inline]
     pub fn count_ones(&self) -> usize {
         self.block_iter().fold(0, |c, bits| c + bits.count_ones()) as usize
+    }
+
+    /// Whether any number of bits set to 1 in the entire range.
+    #[inline]
+    pub fn has_any_ones(&self) -> bool {
+        self.block_iter().any(|bits| bits != 0)
     }
 
     /// Counts the number of bits set to 0 in the entire range.
@@ -304,7 +312,7 @@ impl BitData {
     /// Sets the bit at the given index to the provided value.
     #[inline]
     pub fn set_bit(&mut self, index: usize, value: bool) {
-        self.deref_mut().set_bit(index, value)
+        self.deref_mut().set_bit(index, value);
     }
 
     /// Returns an iterator over all bits in this vector as `bool`s.
@@ -401,6 +409,10 @@ impl BitData {
     /// Extends a [`BitData`] with the contents of a [`BitSlice`], left-shifting the bits in each block
     ///
     /// Note this method assumes that the last `shift` bits in `self` are zero
+    ///
+    /// # Panics
+    ///
+    /// the shift must be less than the block size and `self` cannot be empty
     pub fn extend_from_slice_left_shifted(&mut self, other: &BitSlice, shift: usize) {
         if shift >= BLOCKSIZE {
             panic!("Shift must be less than BLOCKSIZE");
@@ -412,7 +424,7 @@ impl BitData {
         }
 
         self.0.reserve(other.0.len());
-        for bits in other.0.iter() {
+        for bits in &other.0 {
             let left_part = bits.wrapping_shr((BLOCKSIZE - shift) as u32);
             let right_part = bits.wrapping_shl(shift as u32);
             if let Some(last) = self.0.last_mut() {
@@ -426,11 +438,19 @@ impl BitData {
     pub fn pop(&mut self) -> Option<BitBlock> {
         self.0.pop()
     }
+
+    pub fn negate(&self) -> Self {
+        let mut negated = self.clone();
+        negated
+            .block_iter_mut()
+            .for_each(|cur_block| *cur_block = !*cur_block);
+        negated
+    }
 }
 
 impl fmt::Display for BitData {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for &bits in self.0.iter() {
+        for &bits in &self.0 {
             write!(f, "{:064b}", bits)?;
         }
         Ok(())
@@ -451,6 +471,15 @@ impl BitXorAssign<&Self> for BitSlice {
     fn bitxor_assign(&mut self, rhs: &BitSlice) {
         for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
             *bits0 ^= bits1;
+        }
+    }
+}
+
+impl BitOrAssign<&Self> for BitSlice {
+    #[inline]
+    fn bitor_assign(&mut self, rhs: &BitSlice) {
+        for (bits0, bits1) in self.0.iter_mut().zip(rhs.0.iter()) {
+            *bits0 |= bits1;
         }
     }
 }
@@ -516,6 +545,7 @@ impl DerefMut for BitData {
 
 impl From<Vec<bool>> for BitData {
     fn from(value: Vec<bool>) -> Self {
+        #[allow(clippy::from_iter_instead_of_collect)]
         BitData::from_iter(value.iter().copied())
     }
 }
@@ -523,6 +553,22 @@ impl From<Vec<bool>> for BitData {
 impl From<BitData> for Vec<bool> {
     fn from(value: BitData) -> Self {
         value.iter().collect()
+    }
+}
+
+impl<'a> IntoIterator for &'a BitData {
+    type Item = bool;
+    type IntoIter = BitIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a BitSlice {
+    type Item = bool;
+    type IntoIter = BitIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -636,6 +682,7 @@ mod test {
         let mut v3 = v1.clone();
         v3.extend_from_slice_left_shifted(&v2, shift);
 
+        #[allow(clippy::bool_assert_comparison)]
         for i in 0..v3.num_bits() {
             if i < 10 * BLOCKSIZE - shift {
                 assert_eq!(v3.bit(i), v1.bit(i));
