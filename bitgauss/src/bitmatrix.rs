@@ -756,6 +756,14 @@ impl BitMatrix {
                 "Trying to select a row which does not exist".to_string(),
             ));
         }
+        if rows_selected.is_empty() {
+            return Ok(Self::zeros(0, self.cols()));
+        }
+        if rows_selected.len() == 1 {
+            let mut only_row = BitMatrix::zeros(1, self.cols());
+            only_row.add_bits_to_row(self.row(rows_selected[0]), 0);
+            return Ok(only_row);
+        }
         let num_cols = self.cols();
         let relevant_rows = rows_selected.iter().map(|cur_row| {
             let mut cur_row_bitmatrix = BitMatrix::zeros(1, num_cols);
@@ -776,6 +784,9 @@ impl BitMatrix {
             return Err(BitMatrixError(
                 "Trying to select a column which does not exist".to_string(),
             ));
+        }
+        if cols_selected.is_empty() {
+            return Ok(Self::zeros(self.rows(), 0));
         }
         let transposed = self.transposed();
         let mut transpose_subbed = transposed.select_rows(cols_selected)?;

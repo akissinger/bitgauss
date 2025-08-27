@@ -506,8 +506,14 @@ mod test {
             true,
         );
 
+        let old_string = (0..8)
+            .map(|idx| format!("{}\n", shor_code.generating_ms[idx]))
+            .collect::<String>();
         shor_code.change_presentation(1);
         // can see that it has change the generators, but not the group
-        //assert!(false, "{}", (0..8).map(|idx| format!("{}\n", shor_code.generating_ms[idx])).collect::<String>());
+        let new_string = (0..8)
+            .map(|idx| format!("{}\n", shor_code.generating_ms[idx]))
+            .collect::<String>();
+        assert_ne!(old_string, new_string);
     }
 }
