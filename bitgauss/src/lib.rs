@@ -23,7 +23,9 @@
     clippy::bool_to_int_with_if
 )]
 pub mod bitmatrix;
-pub mod bitvec;
+pub mod bitvector;
+pub mod data;
 
 pub use bitmatrix::{BitMatrix, RowOps};
-pub use bitvec::{BitBlock, BitSlice, BitVec};
+pub use bitvector::BitVector;
+pub use data::{BitBlock, BitData, BitSlice};

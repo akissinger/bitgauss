@@ -1,0 +1,1 @@
+These are the Python bindings for bitgauss, a Rust library for linear algebra over the 2-element finite field. The main data structure is `BitMatrix`, a bit-packed 2D matrix that implements fast linear algebraic operations using bitwise operations.

@@ -1,5 +1,6 @@
-use crate::bitvec::{min_blocks, BitBlock, BitSlice, BitVec, BLOCKSIZE, MSB_ON};
+use crate::{data::*, BitVector};
 use rand::Rng;
+use rustc_hash::FxHashMap;
 use std::{
     fmt,
     ops::{Index, Mul},
@@ -38,7 +39,7 @@ pub struct BitMatrix {
     col_blocks: usize,
 
     /// a [`BitVec`] containing the data of the matrix, stored in row-major order
-    data: BitVec,
+    data: BitData,
 }
 
 /// A trait for types that can have row operations performed on them
@@ -80,6 +81,24 @@ impl BitMatrix {
         }
     }
 
+    /// Creates a new `BitMatrix` from a vector of bool vectors
+    pub fn from_bool_vec(data: &Vec<Vec<bool>>) -> Self {
+        Self::build(
+            data.len(),
+            if data.is_empty() { 0 } else { data[0].len() },
+            |i, j| data[i][j],
+        )
+    }
+
+    /// Creates a new `BitMatrix` from a vector of integer vectors
+    pub fn from_int_vec(data: &Vec<Vec<usize>>) -> Self {
+        Self::build(
+            data.len(),
+            if data.is_empty() { 0 } else { data[0].len() },
+            |i, j| data[i][j] != 0,
+        )
+    }
+
     /// Creates a new `BitMatrix` of size `rows` x `cols` with all bits set to 0
     pub fn zeros(rows: usize, cols: usize) -> Self {
         let col_blocks = min_blocks(cols);
@@ -87,7 +106,7 @@ impl BitMatrix {
             rows,
             cols,
             col_blocks,
-            data: BitVec::zeros(rows * col_blocks),
+            data: BitData::zeros(rows * col_blocks),
         }
     }
 
@@ -199,7 +218,7 @@ impl BitMatrix {
         let row_blocks = min_blocks(data_rows);
         if data_rows != row_blocks * BLOCKSIZE || row_blocks != self.col_blocks {
             let blocks = usize::max(row_blocks, self.col_blocks);
-            let mut data = BitVec::with_capacity(BLOCKSIZE * blocks * blocks);
+            let mut data = BitData::with_capacity(BLOCKSIZE * blocks * blocks);
             for i in 0..(BLOCKSIZE * blocks) {
                 for j in 0..blocks {
                     data.push_block(if i < self.rows() && j < self.col_blocks {
@@ -297,17 +316,50 @@ impl BitMatrix {
         self.transpose_helper(None);
     }
 
+    /// Returns the number of 1s in the given row
+    #[inline]
+    pub fn row_weight(&self, row: usize) -> usize {
+        self.data
+            .bit_range(row * self.col_blocks, (row + 1) * self.col_blocks)
+            .count_ones()
+    }
+
+    /// Helper function for Patel-Markov-Hayes algorithm
+    ///
+    /// Get the current "chunk", i.e. set of columns of size `chunksize` that the given `col` is contained
+    /// in. Return this as inclusive start index, exclusive end index, column block, and bitmask. If the
+    /// `chunksize` doesn't divide `BLOCKSIZE`, the last chunk in a block will be truncated to fit.
+    #[inline]
+    fn chunk(chunksize: usize, col: usize) -> (usize, usize, usize, BitBlock) {
+        let col_block = col / BLOCKSIZE;
+        let offset = col % BLOCKSIZE;
+        let i0 = col_block * BLOCKSIZE + (offset / chunksize) * chunksize;
+        let i1 = usize::min(i0 + chunksize, BLOCKSIZE);
+        // bitmask to catch the current chunk
+        let mask = BitBlock::MAX.wrapping_shr(i0 as u32)
+            & BitBlock::MAX.wrapping_shl((BLOCKSIZE - i1) as u32);
+
+        (
+            col_block * BLOCKSIZE + i0,
+            col_block * BLOCKSIZE + i1,
+            col_block,
+            mask,
+        )
+    }
+
     /// Performs gaussian elimination while also performing matching row operations on `proxy`
     /// and returns a vector of pivot columns.
     fn gauss_helper(
         &mut self,
         full: bool,
-        _blocksize: usize,
+        chunksize: usize,
         proxy: &mut impl RowOps,
     ) -> Vec<usize> {
         let mut row = 0;
         let mut pcol = 0;
         let mut pcols = vec![];
+        let mut chunk_end = 0;
+        let chunksize = usize::min(chunksize, BLOCKSIZE);
         while row < self.rows() {
             let mut next_row = None;
             'outer: while pcol < self.cols() {
@@ -326,7 +378,27 @@ impl BitMatrix {
                     proxy.swap_rows(row, row1);
                 }
 
-                let row_vec = self.row(row).to_vec();
+                // eliminate duplicate rows below "row" in the current chunk
+                if chunksize > 1 && pcol >= chunk_end {
+                    let (_, c, col_block, mask) = Self::chunk(chunksize, pcol);
+                    chunk_end = c;
+                    let mut seen = FxHashMap::default();
+
+                    for i in row..self.rows() {
+                        let bits = self.data[i * self.col_blocks + col_block] & mask;
+
+                        if bits != 0 {
+                            if let Some(&prev_row) = seen.get(&bits) {
+                                self.add_row(prev_row, i);
+                                proxy.add_row(prev_row, i);
+                            } else {
+                                seen.insert(bits, i);
+                            }
+                        }
+                    }
+                }
+
+                let row_vec = self.row(row).to_owned();
 
                 for i in (row1 + 1)..self.rows() {
                     if self[(i, pcol)] {
@@ -344,9 +416,30 @@ impl BitMatrix {
         }
 
         if full {
+            let mut chunk_start = self.cols();
             for row in (0..pcols.len()).rev() {
                 let pcol = pcols[row];
-                let row_vec = self.row(row).to_vec();
+
+                // eliminate duplicate rows above "row" in the current chunk
+                if chunksize > 1 && pcol < chunk_start {
+                    let (c, _, col_block, mask) = Self::chunk(chunksize, pcol);
+                    chunk_start = c;
+                    let mut seen = FxHashMap::default();
+                    for i in (0..=row).rev() {
+                        let bits = self.data[i * self.col_blocks + col_block] & mask;
+
+                        if bits != 0 {
+                            if let Some(&prev_row) = seen.get(&bits) {
+                                self.add_row(prev_row, i);
+                                proxy.add_row(prev_row, i);
+                            } else {
+                                seen.insert(bits, i);
+                            }
+                        }
+                    }
+                }
+
+                let row_vec = self.row(row).to_owned();
                 for i in 0..row {
                     if self[(i, pcol)] {
                         self.add_bits_to_row(&row_vec, i);
@@ -368,7 +461,7 @@ impl BitMatrix {
         self.gauss_helper(full, 1, &mut ());
     }
 
-    /// Performs gaussian elimination with a `blocksize` and a `proxy`
+    /// Performs gaussian elimination with a `chunksize` and a `proxy`
     ///
     /// # Arguments
     /// - `full`: if this is true, compute reduced echelon form
@@ -376,8 +469,14 @@ impl BitMatrix {
     /// - `proxy`: a struct that implements [`RowOps`] and receives the same row operations as the
     ///   matrix being reduced. This can be used e.g. for reversible logic circuit synthesis
     #[inline]
-    pub fn gauss_with_proxy(&mut self, full: bool, blocksize: usize, proxy: &mut impl RowOps) {
-        self.gauss_helper(full, blocksize, proxy);
+    pub fn gauss_with_proxy(&mut self, full: bool, chunksize: usize, proxy: &mut impl RowOps) {
+        self.gauss_helper(full, chunksize, proxy);
+    }
+
+    /// Performs gaussian elimination using the Patel-Markov-Hayes algorithm with the given `chunksize`
+    #[inline]
+    pub fn gauss_with_chunksize(&mut self, full: bool, chunksize: usize) {
+        self.gauss_helper(full, chunksize, &mut ());
     }
 
     /// Computes the rank of the matrix using gaussian elimination
@@ -444,6 +543,23 @@ impl BitMatrix {
         Ok(res)
     }
 
+    /// Tries to multiply with the given `BitVector` (considered as a column vector)
+    /// and returns the result
+    pub fn try_mul_vector(&self, vector: &BitVector) -> Result<BitVector, BitMatrixError> {
+        if self.cols() != vector.len() {
+            return Err(BitMatrixError(format!(
+                "Cannot multiply matrix of dimensions {}x{} with vector of length {}",
+                self.rows(),
+                self.cols(),
+                vector.len()
+            )));
+        }
+
+        Ok(BitVector::build(self.rows(), |i| {
+            self.row(i).dot(vector.as_slice())
+        }))
+    }
+
     /// Try to vertically stack this matrix with another one and returns the result
     ///
     /// The resulting matrix will have the minimal column padding.
@@ -461,7 +577,7 @@ impl BitMatrix {
         }
 
         let rows = self.rows() + other.rows();
-        let mut data = BitVec::with_capacity(rows * self.col_blocks);
+        let mut data = BitData::with_capacity(rows * self.col_blocks);
         let col_blocks = min_blocks(self.cols());
 
         data.reserve(rows * col_blocks);
@@ -507,7 +623,7 @@ impl BitMatrix {
         }
 
         let cols = self.cols() + other.cols();
-        let mut data = BitVec::with_capacity(self.rows * min_blocks(cols));
+        let mut data = BitData::with_capacity(self.rows * min_blocks(cols));
         let col_blocks = min_blocks(cols);
         let self_col_blocks = min_blocks(self.cols());
         let other_col_blocks = min_blocks(other.cols());
@@ -643,6 +759,25 @@ impl RowOps for () {
     fn swap_rows(&mut self, _: usize, _: usize) {}
 }
 
+/// A counter implementation of `RowOps` that counts the number of row operations performed
+#[derive(Debug, Default)]
+pub struct RowOpsCounter {
+    pub add_count: usize,
+    pub swap_count: usize,
+}
+
+impl RowOps for RowOpsCounter {
+    #[inline]
+    fn add_row(&mut self, _: usize, _: usize) {
+        self.add_count += 1;
+    }
+
+    #[inline]
+    fn swap_rows(&mut self, _: usize, _: usize) {
+        self.swap_count += 1;
+    }
+}
+
 /// An implementation of `RowOps` for `BitMatrix` that allows performing row operations on the matrix
 impl RowOps for BitMatrix {
     #[inline]
@@ -710,6 +845,48 @@ impl Mul for &BitMatrix {
 mod test {
     use super::*;
     use rand::{rngs::SmallRng, SeedableRng};
+
+    // test from_bool_vec
+    #[test]
+    fn test_from_bool_vec() {
+        let data = vec![vec![true, false, true], vec![false, true, false]];
+        let m = BitMatrix::from_bool_vec(&data);
+        assert_eq!(m.rows(), 2);
+        assert_eq!(m.cols(), 3);
+        assert_eq!(m.bit(0, 0), true);
+        assert_eq!(m.bit(0, 1), false);
+        assert_eq!(m.bit(0, 2), true);
+        assert_eq!(m.bit(1, 0), false);
+        assert_eq!(m.bit(1, 1), true);
+        assert_eq!(m.bit(1, 2), false);
+    }
+
+    // test from_int_vec
+    #[test]
+    fn test_from_int_vec() {
+        let data = vec![vec![1, 0, 1], vec![0, 1, 0]];
+        let m = BitMatrix::from_int_vec(&data);
+        assert_eq!(m.rows(), 2);
+        assert_eq!(m.cols(), 3);
+        assert_eq!(m.bit(0, 0), true);
+        assert_eq!(m.bit(0, 1), false);
+        assert_eq!(m.bit(0, 2), true);
+        assert_eq!(m.bit(1, 0), false);
+        assert_eq!(m.bit(1, 1), true);
+        assert_eq!(m.bit(1, 2), false);
+    }
+
+    // test construction from empty vectors
+    #[test]
+    fn test_from_empty_vecs() {
+        let m = BitMatrix::from_bool_vec(&Vec::new());
+        assert_eq!(m.rows(), 0);
+        assert_eq!(m.cols(), 0);
+
+        let m = BitMatrix::from_int_vec(&Vec::new());
+        assert_eq!(m.rows(), 0);
+        assert_eq!(m.cols(), 0);
+    }
 
     #[test]
     fn random_gauss() {
@@ -920,7 +1097,7 @@ mod test {
     }
 
     #[test]
-    fn test_build_function() {
+    fn build_function() {
         // Test building a matrix with a custom function
         let m = BitMatrix::build(3, 4, |i, j| (i + j) % 2 == 0);
         assert_eq!(m.rows(), 3);
@@ -935,7 +1112,7 @@ mod test {
     }
 
     #[test]
-    fn test_empty_matrix() {
+    fn empty_matrix() {
         let m = BitMatrix::zeros(0, 0);
         assert_eq!(m.rows(), 0);
         assert_eq!(m.cols(), 0);
@@ -943,7 +1120,7 @@ mod test {
     }
 
     #[test]
-    fn test_single_element_matrix() {
+    fn single_element_matrix() {
         let m = BitMatrix::build(1, 1, |_, _| true);
         assert_eq!(m.rows(), 1);
         assert_eq!(m.cols(), 1);
@@ -952,7 +1129,7 @@ mod test {
     }
 
     #[test]
-    fn test_bit_operations() {
+    fn bit_operations() {
         let mut m = BitMatrix::zeros(3, 3);
 
         // Test setting and getting bits
@@ -969,7 +1146,7 @@ mod test {
     }
 
     #[test]
-    fn test_is_zero() {
+    fn is_zero() {
         let zero_matrix = BitMatrix::zeros(10, 10);
         assert!(zero_matrix.is_zero());
 
@@ -983,49 +1160,49 @@ mod test {
     }
 
     #[test]
-    fn test_vstack_dimension_mismatch() {
+    fn vstack_dimension_mismatch() {
         let m1 = BitMatrix::zeros(3, 4);
         let m2 = BitMatrix::zeros(2, 5); // Different number of columns
         m1.try_vstack(&m2).unwrap_err();
     }
 
     #[test]
-    fn test_hstack_dimension_mismatch() {
+    fn hstack_dimension_mismatch() {
         let m1 = BitMatrix::zeros(3, 4);
         let m2 = BitMatrix::zeros(5, 2); // Different number of rows
         m1.try_hstack(&m2).unwrap_err();
     }
 
     #[test]
-    fn test_vstack_from_iter_empty() {
+    fn vstack_from_iter_empty() {
         let result = BitMatrix::vstack_from_iter(std::iter::empty());
         assert_eq!(result.rows(), 0);
         assert_eq!(result.cols(), 0);
     }
 
     #[test]
-    fn test_hstack_from_iter_empty() {
+    fn hstack_from_iter_empty() {
         let result = BitMatrix::hstack_from_iter(std::iter::empty());
         assert_eq!(result.rows(), 0);
         assert_eq!(result.cols(), 0);
     }
 
     #[test]
-    fn test_vstack_from_iter_single() {
+    fn vstack_from_iter_single() {
         let m = BitMatrix::identity(3);
         let result = BitMatrix::vstack_from_iter([&m]);
         assert_eq!(result, m);
     }
 
     #[test]
-    fn test_hstack_from_iter_single() {
+    fn hstack_from_iter_single() {
         let m = BitMatrix::identity(3);
         let result = BitMatrix::hstack_from_iter([&m]);
         assert_eq!(result, m);
     }
 
     #[test]
-    fn test_vstack_from_iter_multiple() {
+    fn vstack_from_iter_multiple() {
         let m1 = BitMatrix::identity(2);
         let m2 = BitMatrix::zeros(3, 2);
         let m3 = BitMatrix::build(1, 2, |_, _| true);
@@ -1042,7 +1219,7 @@ mod test {
     }
 
     #[test]
-    fn test_hstack_from_iter_multiple() {
+    fn hstack_from_iter_multiple() {
         let m1 = BitMatrix::identity(2);
         let m2 = BitMatrix::zeros(2, 3);
         let m3 = BitMatrix::build(2, 1, |_, _| true);
@@ -1059,14 +1236,14 @@ mod test {
     }
 
     #[test]
-    fn test_nullspace_empty_matrix() {
+    fn nullspace_empty_matrix() {
         let m = BitMatrix::zeros(0, 0);
         let nullspace = m.nullspace();
         assert_eq!(nullspace.len(), 0);
     }
 
     #[test]
-    fn test_nullspace_zero_matrix() {
+    fn nullspace_zero_matrix() {
         let m = BitMatrix::zeros(3, 5);
         let nullspace = m.nullspace();
         assert_eq!(nullspace.len(), 5); // All columns are free variables
@@ -1079,14 +1256,14 @@ mod test {
     }
 
     #[test]
-    fn test_nullspace_identity_matrix() {
+    fn nullspace_identity_matrix() {
         let m = BitMatrix::identity(5);
         let nullspace = m.nullspace();
         assert_eq!(nullspace.len(), 0); // No nullspace for invertible matrix
     }
 
     #[test]
-    fn test_nullspace_properties() {
+    fn nullspace_properties() {
         let mut rng = SmallRng::seed_from_u64(123);
         let m = BitMatrix::random(&mut rng, 4, 7);
         let nullspace = m.nullspace();
@@ -1105,7 +1282,7 @@ mod test {
     }
 
     #[test]
-    fn test_row_operations() {
+    fn row_operations() {
         let mut m = BitMatrix::identity(3);
         let original = m.clone();
 
@@ -1127,7 +1304,7 @@ mod test {
     }
 
     #[test]
-    fn test_add_bits_to_row() {
+    fn add_bits_to_row() {
         let mut m = BitMatrix::zeros(3, 4);
         let bits = BitMatrix::build(1, 4, |_, j| j % 2 == 0);
 
@@ -1140,7 +1317,7 @@ mod test {
     }
 
     #[test]
-    fn test_row_accessors() {
+    fn row_accessors() {
         let m = BitMatrix::identity(3);
 
         // Test immutable row access
@@ -1161,8 +1338,8 @@ mod test {
     }
 
     #[test]
-    fn test_transpose_inplace_rectangular_matrices() {
-        let mut rng = SmallRng::seed_from_u64(665_544);
+    fn transpose_inplace_rectangular_matrices() {
+        let mut rng = SmallRng::seed_from_u64(665544);
 
         // Test various rectangular matrix dimensions
         let test_cases = [
@@ -1200,5 +1377,82 @@ mod test {
                 rows, cols
             );
         }
+    }
+
+    // test gaussian elimination with bigger chunksize
+    #[test]
+    fn gauss_chunks() {
+        let mut rng = SmallRng::seed_from_u64(665544);
+        let m = BitMatrix::random(&mut rng, 100, 200);
+        let mut m1 = m.clone();
+        let mut c1 = RowOpsCounter::default();
+        m1.gauss_with_proxy(true, 1, &mut c1);
+        println!(
+            "Gaussian elimination with chunksize 1: {} swaps, {} adds",
+            c1.swap_count, c1.add_count
+        );
+
+        for chunksize in [2, 3, 4, 5, 6, 7, 8, 9, 10] {
+            let mut m2 = m.clone();
+            let mut c2 = RowOpsCounter::default();
+            println!("Testing chunksize {}", chunksize);
+            // Perform Gaussian elimination with the given chunksize
+            m2.gauss_with_proxy(true, chunksize, &mut c2);
+            assert_eq!(m1, m2, "Gaussian elimination with chunksize failed");
+            println!(
+                "Gaussian elimination with chunksize {}: {} swaps, {} adds",
+                chunksize, c2.swap_count, c2.add_count
+            );
+        }
+    }
+
+    // test PMH on invertible matrices
+    #[test]
+    fn gauss_chunks_inv() {
+        let mut rng = SmallRng::seed_from_u64(665544);
+        let m = BitMatrix::random_invertible(&mut rng, 100);
+        let mut m1 = m.clone();
+        let mut c1 = RowOpsCounter::default();
+        m1.gauss_with_proxy(true, 1, &mut c1);
+        println!(
+            "Gaussian elimination with chunksize 1: {} swaps, {} adds",
+            c1.swap_count, c1.add_count
+        );
+
+        for chunksize in [2, 3, 4, 5, 6, 7, 8, 9, 10] {
+            let mut m2 = m.clone();
+            let mut c2 = RowOpsCounter::default();
+            println!("Testing chunksize {}", chunksize);
+            // Perform Gaussian elimination with the given chunksize
+            m2.gauss_with_proxy(true, chunksize, &mut c2);
+            assert_eq!(m1, m2, "Gaussian elimination with chunksize failed");
+            println!(
+                "Gaussian elimination with chunksize {}: {} swaps, {} adds",
+                chunksize, c2.swap_count, c2.add_count
+            );
+        }
+    }
+
+    // test the example code in README.md
+    #[test]
+    fn readme() {
+        let mut rng = SmallRng::seed_from_u64(1);
+
+        // Construct a 300x400 matrix whose entries are given by the bool-valued function
+        let mut m1 = BitMatrix::build(300, 400, |i, j| (i + j) % 2 == 0);
+
+        // Construct a random 80x300 matrix using the given random number generator
+        let m2 = BitMatrix::random(&mut rng, 80, 300);
+
+        // Construct a random invertible 300x300 matrix
+        let m3 = BitMatrix::random_invertible(&mut rng, 300);
+
+        let _m4 = &m2 * &m3; // Matrix multiplication
+        let _m2_inv = m3.inverse(); // Returns the inverse
+        let _m1_t = m1.transposed(); // Returns transpose
+        m1.transpose_inplace(); // Transpose inplace (padding if necessary)
+        m1.gauss(false); // Transform to row-echelon form
+        m1.gauss(true); // Transform to reduced row-echelon form
+        let _ns = m1.nullspace(); // Returns a spanning set for the nullspace
     }
 }

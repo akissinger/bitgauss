@@ -1,7 +1,4 @@
-use bitgauss::{
-    bitmatrix::BitMatrix,
-    bitvec::{BitAndAssign, BitBlock, BitVec, BitXorAssign},
-};
+use bitgauss::{bitmatrix::BitMatrix, data::*};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 // use std::hint::black_box;
@@ -10,9 +7,9 @@ fn bitvec_ops(c: &mut Criterion) {
     let mut group = c.benchmark_group("bitvec_ops");
     let sz = 1563; // ~100K bits
     let mut rng = SmallRng::seed_from_u64(1);
-    let vec1: BitVec = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
-    let vec2: BitVec = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
-    let vec3: BitVec = (0..(2 * sz)).map(|_| rng.random::<BitBlock>()).collect();
+    let vec1: BitData = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
+    let vec2: BitData = (0..sz).map(|_| rng.random::<BitBlock>()).collect();
+    let vec3: BitData = (0..(2 * sz)).map(|_| rng.random::<BitBlock>()).collect();
 
     group.bench_function("bitvec_xor", |b| {
         b.iter_batched_ref(
@@ -72,6 +69,27 @@ fn big_gauss(c: &mut Criterion) {
     });
 }
 
+fn patel_markov_hayes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("patel_markov_hayes");
+    group.sample_size(10);
+    let mut rng = SmallRng::seed_from_u64(1);
+    let m = BitMatrix::random(&mut rng, 1000, 1000);
+    group.bench_function("pmh_chunksize_1", |b| {
+        b.iter_batched_ref(
+            || m.clone(),
+            |m| m.gauss_with_chunksize(true, 1),
+            BatchSize::LargeInput,
+        )
+    });
+    group.bench_function("pmh_chunksize_10", |b| {
+        b.iter_batched_ref(
+            || m.clone(),
+            |m| m.gauss_with_chunksize(true, 10),
+            BatchSize::LargeInput,
+        )
+    });
+}
+
 fn transpose(c: &mut Criterion) {
     let mut group = c.benchmark_group("transpose");
     let mut rng = SmallRng::seed_from_u64(1);
@@ -124,5 +142,13 @@ fn mult(c: &mut Criterion) {
     group.bench_function("huge", |b| b.iter(|| &m1 * &m2));
 }
 
-criterion_group!(benches, bitvec_ops, gauss, big_gauss, transpose, mult);
+criterion_group!(
+    benches,
+    bitvec_ops,
+    gauss,
+    big_gauss,
+    transpose,
+    mult,
+    patel_markov_hayes
+);
 criterion_main!(benches);

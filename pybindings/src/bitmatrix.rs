@@ -16,8 +16,9 @@ use bitgauss::BitMatrix;
 use rand::{rngs::SmallRng, SeedableRng};
 
 #[pyclass(name = "BitMatrix")]
+#[derive(Clone)]
 pub struct PyBitMatrix {
-    inner: BitMatrix,
+    pub(crate) inner: BitMatrix,
 }
 
 #[pymethods]
@@ -239,35 +240,80 @@ impl PyBitMatrix {
     }
 
     /// Matrix multiplication using the @ operator (Python 3.5+)
-    pub fn __matmul__(&self, other: &PyBitMatrix) -> PyResult<Self> {
+    /// Supports both matrix-matrix and matrix-vector multiplication
+    pub fn __matmul__(&self, other: PyObject) -> PyResult<PyObject> {
+        Python::with_gil(|py| {
+            // Try to extract as PyBitMatrix first
+            if let Ok(matrix) = other.extract::<PyBitMatrix>(py) {
+                // Matrix-matrix multiplication
+                match self.inner.try_mul(&matrix.inner) {
+                    Ok(result) => {
+                        let py_result = PyBitMatrix { inner: result };
+                        py_result.into_py_any(py)
+                    }
+                    Err(e) => Err(PyValueError::new_err(format!(
+                        "Matrix multiplication failed: {}",
+                        e
+                    ))),
+                }
+            } else if let Ok(vector) = other.extract::<crate::bitvector::PyBitVector>(py) {
+                // Matrix-vector multiplication
+                match self.inner.try_mul_vector(&vector.inner) {
+                    Ok(result) => {
+                        let py_result = crate::bitvector::PyBitVector { inner: result };
+                        py_result.into_py_any(py)
+                    }
+                    Err(e) => Err(PyValueError::new_err(format!(
+                        "Matrix-vector multiplication failed: {}",
+                        e
+                    ))),
+                }
+            } else {
+                Err(PyValueError::new_err(
+                    "Expected BitMatrix or BitVector for multiplication",
+                ))
+            }
+        })
+    }
+
+    /// Matrix multiplication using the * operator (for compatibility)
+    /// Supports both matrix-matrix and matrix-vector multiplication
+    pub fn __mul__(&self, other: PyObject) -> PyResult<PyObject> {
+        self.__matmul__(other)
+    }
+
+    /// Right-hand matrix multiplication
+    pub fn __rmul__(&self, other: PyObject) -> PyResult<PyObject> {
+        Python::with_gil(|py| {
+            // For right multiplication, we need other @ self
+            if let Ok(matrix) = other.extract::<PyBitMatrix>(py) {
+                matrix.__matmul__(self.clone().into_py_any(py)?)
+            } else {
+                Err(PyValueError::new_err(
+                    "Right multiplication only supported with BitMatrix",
+                ))
+            }
+        })
+    }
+
+    /// In-place matrix multiplication using @=
+    /// Only supports matrix-matrix multiplication for in-place operations
+    pub fn __imatmul__(&mut self, other: &PyBitMatrix) -> PyResult<()> {
         match self.inner.try_mul(&other.inner) {
-            Ok(result) => Ok(PyBitMatrix { inner: result }),
+            Ok(result) => {
+                self.inner = result;
+                Ok(())
+            }
             Err(e) => Err(PyValueError::new_err(format!(
-                "Matrix multiplication failed: {}",
+                "In-place matrix multiplication failed: {}",
                 e
             ))),
         }
     }
 
-    /// Matrix multiplication using the * operator (for compatibility)
-    pub fn __mul__(&self, other: &PyBitMatrix) -> PyResult<Self> {
-        self.__matmul__(other)
-    }
-
-    /// Right-hand matrix multiplication
-    pub fn __rmul__(&self, other: &PyBitMatrix) -> PyResult<Self> {
-        other.__matmul__(self)
-    }
-
-    /// In-place matrix multiplication using @=
-    pub fn __imatmul__(&mut self, other: &PyBitMatrix) -> PyResult<()> {
-        let result = self.__matmul__(other)?;
-        self.inner = result.inner;
-        Ok(())
-    }
-
     /// Matrix multiplication method (alternative to operators)
-    pub fn matmul(&self, other: &PyBitMatrix) -> PyResult<Self> {
+    /// Supports both matrix-matrix and matrix-vector multiplication
+    pub fn matmul(&self, other: PyObject) -> PyResult<PyObject> {
         self.__matmul__(other)
     }
 
@@ -375,6 +421,22 @@ impl PyBitMatrix {
     /// Matrix inequality comparison
     pub fn __ne__(&self, other: &PyBitMatrix) -> bool {
         !self.__eq__(other)
+    }
+
+    /// Matrix-vector multiplication with BitVector
+    pub fn matvec(
+        &self,
+        vector: &crate::bitvector::PyBitVector,
+    ) -> PyResult<crate::bitvector::PyBitVector> {
+        if self.inner.cols() != vector.inner.len() {
+            return Err(PyValueError::new_err(format!(
+                "Matrix columns ({}) must match vector length ({}) for multiplication",
+                self.inner.cols(),
+                vector.inner.len()
+            )));
+        }
+        let result = &self.inner * &vector.inner;
+        Ok(crate::bitvector::PyBitVector { inner: result })
     }
 }
 

@@ -1,0 +1,7 @@
+typing-extensions>=3.7.4
+sphinx>=8.2.3
+sphinx_autodoc_typehints>=1.10
+sphinx_rtd_theme>=0.4
+nbsphinx~=0.9.3
+sphinxcontrib-svg2pdfconverter>=1.2.2
+bitgauss>=0.3.0
