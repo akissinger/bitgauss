@@ -1,3 +1,4 @@
+#![allow(clippy::ptr_arg)]
 use crate::{data::*, BitVector};
 use rand::Rng;
 use rustc_hash::FxHashMap;

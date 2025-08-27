@@ -1,3 +1,4 @@
+#![allow(clippy::ptr_arg)]
 use crate::bitmatrix::BitMatrix;
 use std::fmt;
 use std::ops::{BitXor, BitXorAssign, Index, Mul};
