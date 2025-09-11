@@ -123,6 +123,11 @@ impl PauliString {
     pub fn weight(&self) -> usize {
         self.pauli_letters.weight()
     }
+
+    pub fn pad_right(mut self, right_pad: usize) -> Self {
+        self.pauli_letters.pad_right(right_pad);
+        self
+    }
 }
 
 impl<T> From<T> for F2nSymplectic
@@ -297,9 +302,9 @@ impl SGenerators {
 
     /// Changes the presentation of the group
     /// according to Gaussian elimination on the G-matrix.
-    pub fn change_presentation(&mut self, blocksize: usize) {
+    pub fn change_presentation(&mut self, chunksize: usize) {
         let mut as_matrix = self.as_g_matrix();
-        as_matrix.gauss_with_proxy(true, blocksize, self);
+        as_matrix.gauss_with_proxy(true, chunksize, self);
         debug_assert_eq!(self.as_g_matrix(), as_matrix);
     }
 
@@ -515,5 +520,43 @@ mod test {
             .map(|idx| format!("{}\n", shor_code.generating_ms[idx]))
             .collect::<String>();
         assert_ne!(old_string, new_string);
+    }
+
+    #[test]
+    fn padded_shor_code() {
+        use crate::{PauliString, SGenerators};
+        let shor_shorthand = [
+            "ZZI III III",
+            "IZZ III III",
+            "III ZZI III",
+            "III IZZ III",
+            "III III ZZI",
+            "III III IZZ",
+            "XXX XXX III",
+            "III XXX XXX",
+        ];
+        for pad_amount in [0,1,2,3,4,60,120,1000] {
+            let mut shor_code = SGenerators::new(
+                shor_shorthand
+                    .into_iter()
+                    .map(|s| PauliString::parse(s).unwrap().pad_right(pad_amount))
+                    .collect(),
+                true,
+            );
+
+            for idx in 0..8 {
+                let expected = PauliString::parse(&(shor_shorthand[idx].to_string()+&str::repeat("I", pad_amount))).unwrap();
+                assert_eq!(format!("{}",shor_code.generating_ms[idx]), format!("{}",expected));
+            }
+            let old_string = (0..8)
+                .map(|idx| format!("{}\n", shor_code.generating_ms[idx]))
+                .collect::<String>();
+            shor_code.change_presentation(1);
+            // can see that it has change the generators, but not the group
+            let new_string = (0..8)
+                .map(|idx| format!("{}\n", shor_code.generating_ms[idx]))
+                .collect::<String>();
+            assert_ne!(old_string, new_string);
+        }
     }
 }

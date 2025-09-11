@@ -77,6 +77,24 @@ impl F2nSymplectic {
             }
         }
     }
+
+    /// The inclusion of `F_2^{2n} \to F_2^{2(n+r)}` with `0`s in the last `r`
+    /// parts for both the `X` and `Z` parts which are the two standard Lagrangian
+    /// subspaces.
+    #[allow(clippy::missing_panics_doc)]
+    pub fn pad_right(&mut self, mut right_pad: usize) {
+        assert!(self.first_part.num_bits() >= self.my_n, "{} vs {}", self.first_part.num_bits(), self.my_n);
+        let how_much_room_already = self.first_part.num_bits().saturating_sub(self.my_n);
+        if right_pad > how_much_room_already {
+            self.my_n += right_pad;
+            right_pad = right_pad.saturating_sub(how_much_room_already);
+            let requisite_zeros = BitData::zeros(min_blocks(right_pad));
+            self.first_part.extend_from_slice(&requisite_zeros);
+            self.second_part.extend_from_slice(&requisite_zeros);
+        } else {
+            self.my_n += right_pad;
+        }
+    }
 }
 
 impl Add for &F2nSymplectic {
