@@ -84,6 +84,9 @@ impl PauliString {
         })
     }
 
+    /// Construct a weight one `PauliString`
+    /// `{overall_factor} * {which_letter}_{where_nontrivial}`
+    /// acting on `how_many_total` qubits.
     pub fn weight_one(
         where_nontrivial: usize,
         how_many_total: usize,
@@ -124,9 +127,16 @@ impl PauliString {
         self.pauli_letters.weight()
     }
 
+    /// Tensor this operator with identity on `right_pad` more qubits.
     pub fn pad_right(mut self, right_pad: usize) -> Self {
         self.pauli_letters.pad_right(right_pad);
         self
+    }
+
+    /// Conjugate this `P_n` operator by `H otimes I otimes H otimes H` etc.
+    /// where we have specified which locations have `H` with `where_hs`
+    pub fn hadamard_transform(&mut self, where_hs: BitData) {
+        self.pauli_letters.hadamard_transform(where_hs);
     }
 }
 
@@ -389,6 +399,23 @@ impl SGenerators {
             to_return
         })
     }
+
+    /// Tensor this operator with identity on `right_pad` more qubits.
+    pub fn pad_right(mut self, right_pad: usize) {
+        self.generating_ms.iter_mut().for_each(|operator| {
+            let mut dummy = PauliString::weight_one(0, 4, PauliLetter::I, IPower::One);
+            core::mem::swap(&mut dummy, operator);
+            *operator = dummy.pad_right(right_pad);
+        });
+    }
+
+    /// Conjugate all these `P_n` operators by `H otimes I otimes H otimes H` etc.
+    /// where we have specified which locations have `H` with `where_hs`
+    pub fn hadamard_transform(&mut self, where_hs: &BitData) {
+        self.generating_ms
+            .iter_mut()
+            .for_each(|operator| operator.hadamard_transform(where_hs.clone()));
+    }
 }
 
 impl RowOps for SGenerators {
@@ -535,7 +562,7 @@ mod test {
             "XXX XXX III",
             "III XXX XXX",
         ];
-        for pad_amount in [0,1,2,3,4,60,120,1000] {
+        for pad_amount in [0, 1, 2, 3, 4, 60, 120, 1000] {
             let mut shor_code = SGenerators::new(
                 shor_shorthand
                     .into_iter()
@@ -545,8 +572,14 @@ mod test {
             );
 
             for idx in 0..8 {
-                let expected = PauliString::parse(&(shor_shorthand[idx].to_string()+&str::repeat("I", pad_amount))).unwrap();
-                assert_eq!(format!("{}",shor_code.generating_ms[idx]), format!("{}",expected));
+                let expected = PauliString::parse(
+                    &(shor_shorthand[idx].to_string() + &str::repeat("I", pad_amount)),
+                )
+                .unwrap();
+                assert_eq!(
+                    format!("{}", shor_code.generating_ms[idx]),
+                    format!("{}", expected)
+                );
             }
             let old_string = (0..8)
                 .map(|idx| format!("{}\n", shor_code.generating_ms[idx]))

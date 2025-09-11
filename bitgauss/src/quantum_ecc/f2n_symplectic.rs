@@ -83,7 +83,12 @@ impl F2nSymplectic {
     /// subspaces.
     #[allow(clippy::missing_panics_doc)]
     pub fn pad_right(&mut self, mut right_pad: usize) {
-        assert!(self.first_part.num_bits() >= self.my_n, "{} vs {}", self.first_part.num_bits(), self.my_n);
+        assert!(
+            self.first_part.num_bits() >= self.my_n,
+            "{} vs {}",
+            self.first_part.num_bits(),
+            self.my_n
+        );
         let how_much_room_already = self.first_part.num_bits().saturating_sub(self.my_n);
         if right_pad > how_much_room_already {
             self.my_n += right_pad;
