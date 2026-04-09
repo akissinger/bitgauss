@@ -82,7 +82,7 @@ impl BitMatrix {
     }
 
     /// Creates a new `BitMatrix` from a vector of bool vectors
-    pub fn from_bool_vec(data: &Vec<Vec<bool>>) -> Self {
+    pub fn from_bool_vec(data: &[Vec<bool>]) -> Self {
         Self::build(
             data.len(),
             if data.is_empty() { 0 } else { data[0].len() },
@@ -91,7 +91,7 @@ impl BitMatrix {
     }
 
     /// Creates a new `BitMatrix` from a vector of integer vectors
-    pub fn from_int_vec(data: &Vec<Vec<usize>>) -> Self {
+    pub fn from_int_vec(data: &[Vec<usize>]) -> Self {
         Self::build(
             data.len(),
             if data.is_empty() { 0 } else { data[0].len() },
@@ -457,8 +457,8 @@ impl BitMatrix {
     /// If `full` is true, then perform full Gauss-Jordan to produce reduced echelon form, otherwise
     /// just returns echelon form.
     #[inline]
-    pub fn gauss(&mut self, full: bool) {
-        self.gauss_helper(full, 1, &mut ());
+    pub fn gauss(&mut self, full: bool) -> Vec<usize> {
+        self.gauss_helper(full, 1, &mut ())
     }
 
     /// Performs gaussian elimination with a `chunksize` and a `proxy`
@@ -466,18 +466,23 @@ impl BitMatrix {
     /// # Arguments
     /// - `full`: if this is true, compute reduced echelon form
     /// - `blocksize`: a Patel-Markov-Hayes blocksize. This can be set to reduce the total number of
-    ///    row operations
+    ///   row operations
     /// - `proxy`: a struct that implements [`RowOps`] and receives the same row operations as the
     ///   matrix being reduced. This can be used e.g. for reversible logic circuit synthesis
     #[inline]
-    pub fn gauss_with_proxy(&mut self, full: bool, chunksize: usize, proxy: &mut impl RowOps) {
-        self.gauss_helper(full, chunksize, proxy);
+    pub fn gauss_with_proxy(
+        &mut self,
+        full: bool,
+        chunksize: usize,
+        proxy: &mut impl RowOps,
+    ) -> Vec<usize> {
+        self.gauss_helper(full, chunksize, proxy)
     }
 
     /// Performs gaussian elimination using the Patel-Markov-Hayes algorithm with the given `chunksize`
     #[inline]
-    pub fn gauss_with_chunksize(&mut self, full: bool, chunksize: usize) {
-        self.gauss_helper(full, chunksize, &mut ());
+    pub fn gauss_with_chunksize(&mut self, full: bool, chunksize: usize) -> Vec<usize> {
+        self.gauss_helper(full, chunksize, &mut ())
     }
 
     /// Computes the rank of the matrix using gaussian elimination
@@ -829,12 +834,12 @@ mod test {
         let m = BitMatrix::from_bool_vec(&data);
         assert_eq!(m.rows(), 2);
         assert_eq!(m.cols(), 3);
-        assert_eq!(m.bit(0, 0), true);
-        assert_eq!(m.bit(0, 1), false);
-        assert_eq!(m.bit(0, 2), true);
-        assert_eq!(m.bit(1, 0), false);
-        assert_eq!(m.bit(1, 1), true);
-        assert_eq!(m.bit(1, 2), false);
+        assert!(m.bit(0, 0));
+        assert!(!m.bit(0, 1));
+        assert!(m.bit(0, 2));
+        assert!(!m.bit(1, 0));
+        assert!(m.bit(1, 1));
+        assert!(!m.bit(1, 2));
     }
 
     // test from_int_vec
@@ -844,12 +849,12 @@ mod test {
         let m = BitMatrix::from_int_vec(&data);
         assert_eq!(m.rows(), 2);
         assert_eq!(m.cols(), 3);
-        assert_eq!(m.bit(0, 0), true);
-        assert_eq!(m.bit(0, 1), false);
-        assert_eq!(m.bit(0, 2), true);
-        assert_eq!(m.bit(1, 0), false);
-        assert_eq!(m.bit(1, 1), true);
-        assert_eq!(m.bit(1, 2), false);
+        assert!(m.bit(0, 0));
+        assert!(!m.bit(0, 1));
+        assert!(m.bit(0, 2));
+        assert!(!m.bit(1, 0));
+        assert!(m.bit(1, 1));
+        assert!(!m.bit(1, 2));
     }
 
     // test construction from empty vectors
@@ -1188,10 +1193,10 @@ mod test {
         assert_eq!(result.cols(), 2);
 
         // Check that the stacking worked correctly
-        assert_eq!(result[(0, 0)], true); // From identity
-        assert_eq!(result[(1, 1)], true); // From identity
-        assert_eq!(result[(2, 0)], false); // From zeros
-        assert_eq!(result[(5, 1)], true); // From all-ones row
+        assert!(result[(0, 0)]); // From identity
+        assert!(result[(1, 1)]); // From identity
+        assert!(!result[(2, 0)]); // From zeros
+        assert!(result[(5, 1)]); // From all-ones row
     }
 
     #[test]
@@ -1205,10 +1210,10 @@ mod test {
         assert_eq!(result.cols(), 6);
 
         // Check that the stacking worked correctly
-        assert_eq!(result[(0, 0)], true); // From identity
-        assert_eq!(result[(1, 1)], true); // From identity
-        assert_eq!(result[(0, 2)], false); // From zeros
-        assert_eq!(result[(0, 5)], true); // From all-ones column
+        assert!(result[(0, 0)]); // From identity
+        assert!(result[(1, 1)]); // From identity
+        assert!(!result[(0, 2)]); // From zeros
+        assert!(result[(0, 5)]); // From all-ones column
     }
 
     #[test]
@@ -1264,10 +1269,10 @@ mod test {
 
         // Test row swap
         m.swap_rows(0, 2);
-        assert_eq!(m[(0, 0)], false);
-        assert_eq!(m[(2, 2)], false);
-        assert_eq!(m[(0, 2)], true);
-        assert_eq!(m[(2, 0)], true);
+        assert!(!m[(0, 0)]);
+        assert!(!m[(2, 2)]);
+        assert!(m[(0, 2)]);
+        assert!(m[(2, 0)]);
 
         // Swap back
         m.swap_rows(0, 2);
@@ -1275,8 +1280,8 @@ mod test {
 
         // Test row addition (XOR)
         m.add_row(0, 1); // Add row 0 to row 1
-        assert_eq!(m[(1, 0)], true); // XOR of 0 and 1
-        assert_eq!(m[(1, 1)], true); // XOR of 1 and 0
+        assert!(m[(1, 0)]); // XOR of 0 and 1
+        assert!(m[(1, 1)]); // XOR of 1 and 0
     }
 
     #[test]
@@ -1305,7 +1310,7 @@ mod test {
         {
             let row1 = m_mut.row_mut(1);
             // Modify the row (this is at the BitVec level)
-            if row1.len() > 0 {
+            if !row1.is_empty() {
                 row1[0] ^= MSB_ON; // Flip the first bit
             }
         }

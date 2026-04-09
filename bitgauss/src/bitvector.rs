@@ -33,12 +33,12 @@ impl BitVector {
     }
 
     /// Creates a new `BitVector` from a vector of bool vectors
-    pub fn from_bool_vec(data: &Vec<bool>) -> Self {
+    pub fn from_bool_vec(data: &[bool]) -> Self {
         Self::build(data.len(), |i| data[i])
     }
 
     /// Creates a new `BitVector` from a vector of integer vectors
-    pub fn from_int_vec(data: &Vec<usize>) -> Self {
+    pub fn from_int_vec(data: &[usize]) -> Self {
         Self::build(data.len(), |i| data[i] != 0)
     }
 
@@ -239,12 +239,12 @@ mod tests {
         // Row 0: 1*1 + 0*1 + 1*0 = 1 + 0 + 0 = 1 (in GF(2))
         // Row 1: 0*1 + 1*1 + 1*0 = 0 + 1 + 0 = 1 (in GF(2))
         // Row 2: 1*1 + 1*1 + 0*0 = 1 + 1 + 0 = 0 (in GF(2), since 1⊕1=0)
-        let matrix = BitMatrix::from_bool_vec(&vec![
+        let matrix = BitMatrix::from_bool_vec(&[
             vec![true, false, true],
             vec![false, true, true],
             vec![true, true, false],
         ]);
-        let vector = BitVector::from_bool_vec(&vec![true, true, false]);
+        let vector = BitVector::from_bool_vec(&[true, true, false]);
 
         let result = &matrix * &vector;
         assert_eq!(result.len(), 3);
@@ -257,20 +257,20 @@ mod tests {
     fn test_matrix_vector_multiplication_identity() {
         // Test multiplication with identity matrix
         let identity = BitMatrix::identity(3);
-        let vector = BitVector::from_bool_vec(&vec![true, false, true]);
+        let vector = BitVector::from_bool_vec(&[true, false, true]);
 
         let result = &identity * &vector;
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0], true);
-        assert_eq!(result[1], false);
-        assert_eq!(result[2], true);
+        assert!(result[0]);
+        assert!(!result[1]);
+        assert!(result[2]);
     }
 
     #[test]
     fn test_matrix_vector_multiplication_zeros() {
         // Test multiplication with zero matrix
         let zero_matrix = BitMatrix::zeros(2, 3);
-        let vector = BitVector::from_bool_vec(&vec![true, true, true]);
+        let vector = BitVector::from_bool_vec(&[true, true, true]);
 
         let result = &zero_matrix * &vector;
         assert_eq!(result.len(), 2);

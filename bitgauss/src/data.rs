@@ -52,7 +52,7 @@ pub fn min_blocks(bits: usize) -> usize {
 ///
 /// Many methods are implemented via dereferencing to [`BitSlice`], which provides
 /// additional bitwise and range operations.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct BitData(Vec<BitBlock>);
 
 /// A range of bits, represented as a slice of [`BitBlock`]s.
@@ -107,7 +107,7 @@ impl BitSlice {
 
     /// Returns an iterator over all bits in this range as `bool`s.
     #[inline]
-    pub fn iter(&self) -> BitIter {
+    pub fn iter(&self) -> BitIter<'_> {
         BitIter {
             inner: self.0.iter(),
             c: BLOCKSIZE,
@@ -309,7 +309,7 @@ impl BitData {
 
     /// Returns an iterator over all bits in this vector as `bool`s.
     #[inline]
-    pub fn iter(&self) -> BitIter {
+    pub fn iter(&self) -> BitIter<'_> {
         self.deref().iter()
     }
 
@@ -375,7 +375,7 @@ impl BitData {
 
     /// Constructs a new empty [`BitData`].
     pub fn new() -> Self {
-        BitData(Vec::new())
+        Self::default()
     }
 
     /// Constructs a new [`BitData`] with the specified capacity in blocks
@@ -588,9 +588,14 @@ mod test {
 
         // ...so the remaining bits should be 0
         assert_eq!(vec.num_bits(), bool_vec1.len());
-        for i in bool_vec.len()..vec.len() {
+        for (i, &x) in bool_vec1
+            .iter()
+            .enumerate()
+            .take(vec.len())
+            .skip(bool_vec.len())
+        {
             assert_eq!((i, vec.bit(i)), (i, false));
-            assert_eq!((i, bool_vec1[i]), (i, false));
+            assert_eq!((i, x), (i, false));
         }
     }
 
@@ -642,7 +647,7 @@ mod test {
             } else if i < 20 * BLOCKSIZE - shift {
                 assert_eq!(v3.bit(i), v2.bit(i - (10 * BLOCKSIZE - shift)));
             } else {
-                assert_eq!(v3.bit(i), false);
+                assert!(!v3.bit(i));
             }
         }
     }
