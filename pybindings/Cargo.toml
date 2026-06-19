@@ -18,5 +18,6 @@ bitgauss = { version = "*", path = "../bitgauss" }
 pyo3 = { version = "0.25.1", features = [
     "extension-module",
     "abi3-py39",
-] }
+]}
+numpy="0.25"
 rand = { workspace = true }

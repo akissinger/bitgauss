@@ -1,6 +1,11 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::{prelude::*, IntoPyObjectExt};
 
+/// added by andi
+use numpy::PyReadonlyArray2;
+use numpy::{IntoPyArray, PyArray2};
+
+
 // Assuming these are the original imports/dependencies from your Rust code
 // You'll need to adjust these based on your actual crate structure
 use bitgauss::BitMatrix;
@@ -181,6 +186,13 @@ impl PyBitMatrix {
             .map(|m| PyBitMatrix { inner: m })
             .collect()
     }
+    // added by andi
+    pub fn nullspace_matrix(&self) -> Self {
+        Self {
+            inner: self.inner.nullspace_matrix(),
+        }
+    }
+
 
     /// Returns a copy of the matrix
     pub fn copy(&self) -> Self {
@@ -403,6 +415,30 @@ impl PyBitMatrix {
         let matrix = BitMatrix::build(rows, cols, |i, j| data[i][j] != 0);
         Ok(PyBitMatrix { inner: matrix })
     }
+
+    /// added by andi
+    #[staticmethod]
+    pub fn from_numpy_bool(arr: PyReadonlyArray2<'_, bool>) -> PyResult<Self> {
+        let a = arr.as_array();
+        let (rows, cols) = a.dim();
+
+        let matrix = bitgauss::BitMatrix::build(rows, cols, |i, j| a[[i, j]]);
+
+        //Ok(Self { inner })
+        Ok(PyBitMatrix { inner: matrix })
+    }
+
+    pub fn to_numpy_bool<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray2<bool>> {
+        let rows = self.inner.rows();
+        let cols = self.inner.cols();
+
+        let arr = numpy::ndarray::Array2::from_shape_fn((rows, cols), |(i, j)| {
+            self.inner.bit(i, j)
+        });
+
+        arr.into_pyarray(py)
+    }
+
 
     /// Matrix equality comparison
     pub fn __eq__(&self, other: &PyBitMatrix) -> bool {
