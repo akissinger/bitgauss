@@ -107,7 +107,7 @@ impl BitSlice {
 
     /// Returns an iterator over all bits in this range as `bool`s.
     #[inline]
-    pub fn iter(&self) -> BitIter {
+    pub fn iter(&self) -> BitIter<'_> {
         BitIter {
             inner: self.0.iter(),
             c: BLOCKSIZE,
@@ -309,7 +309,7 @@ impl BitData {
 
     /// Returns an iterator over all bits in this vector as `bool`s.
     #[inline]
-    pub fn iter(&self) -> BitIter {
+    pub fn iter(&self) -> BitIter<'_> {
         self.deref().iter()
     }
 
