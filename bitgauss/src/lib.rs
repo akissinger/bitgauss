@@ -12,11 +12,24 @@
 //! - [`BitMatrix`]: a two-dimensional matrix based on `BitVec`, which implements
 //!   basic linear algebraic operations
 
-#[allow(clippy::needless_range_loop, clippy::suspicious_arithmetic_impl)]
+#![allow(
+    clippy::needless_range_loop,
+    clippy::suspicious_arithmetic_impl,
+    clippy::uninlined_format_args,
+    clippy::bool_assert_comparison,
+    clippy::cast_possible_truncation,
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use,
+    clippy::bool_to_int_with_if
+)]
+pub mod binary_codes;
 pub mod bitmatrix;
 pub mod bitvector;
 pub mod data;
+pub mod quantum_ecc;
 
+pub use binary_codes::{BinaryLinearCode, HadamardCode};
 pub use bitmatrix::{BitMatrix, RowOps};
 pub use bitvector::BitVector;
 pub use data::{BitBlock, BitData, BitSlice};
+pub use quantum_ecc::{F2nSymplectic, PauliString, SGenerators};
