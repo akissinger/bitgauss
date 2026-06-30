@@ -139,6 +139,44 @@ impl BitMatrix {
         }
     }
 
+    #[inline]
+    pub fn expand(&mut self, new_rows: usize, new_cols: usize, pad_rows: usize, pad_cols: usize) {
+        if new_rows < self.rows || new_cols < self.cols {
+            panic!("Cannot shrink matrix with expand");
+        }
+
+        if pad_rows < new_rows || pad_cols < new_cols {
+            panic!("Pad size must be at least as large as target size");
+        }
+
+        // if new_rows and new_cols fit within the current allocated data, just update the logical size and return
+        let alloc_rows = self.data.len() / self.col_blocks;
+        let alloc_cols = self.col_blocks * BLOCKSIZE;
+        if new_rows <= alloc_rows && new_cols <= alloc_cols {
+            self.rows = new_rows;
+            self.cols = new_cols;
+            return;
+        }
+
+        let new_col_blocks = min_blocks(pad_cols);
+        let mut new_data = BitData::with_capacity(pad_rows * new_col_blocks);
+
+        for i in 0..pad_rows {
+            for j in 0..new_col_blocks {
+                if i < self.rows && j < self.col_blocks {
+                    new_data.push_block(self.data[i * self.col_blocks + j]);
+                } else {
+                    new_data.push_block(0);
+                }
+            }
+        }
+
+        self.rows = new_rows;
+        self.cols = new_cols;
+        self.col_blocks = new_col_blocks;
+        self.data = new_data;
+    }
+
     /// Creates a new random `BitMatrix` of size `rows` x `cols`
     ///
     /// Bits outside of the logical size of the matrix (i.e. `rows` and `cols`) will be masked to 0.
@@ -1406,6 +1444,115 @@ mod test {
                 "Gaussian elimination with chunksize {}: {} swaps, {} adds",
                 chunksize, c2.swap_count, c2.add_count
             );
+        }
+    }
+
+    #[test]
+    fn expand_basic() {
+        let m = BitMatrix::build(2, 3, |i, j| (i + j) % 2 == 0);
+        let mut n = m.clone();
+        n.expand(4, 6, 4, 6);
+
+        assert_eq!(n.rows(), 4);
+        assert_eq!(n.cols(), 6);
+
+        for i in 0..2 {
+            for j in 0..3 {
+                assert_eq!(n[(i, j)], m[(i, j)], "bit mismatch at ({i},{j})");
+            }
+        }
+        for i in 2..4 {
+            for j in 0..6 {
+                assert!(!n[(i, j)], "expected zero at ({i},{j})");
+            }
+        }
+        for i in 0..2 {
+            for j in 3..6 {
+                assert!(!n[(i, j)], "expected zero at ({i},{j})");
+            }
+        }
+    }
+
+    // When new_rows == alloc_rows and new_cols <= col_blocks * BLOCKSIZE,
+    // expand should return early without reallocating.
+    #[test]
+    fn expand_fits_in_allocation() {
+        let m = BitMatrix::build(2, 3, |i, j| (i + j) % 2 == 0);
+        let mut n = m.clone();
+        // 40 < BLOCKSIZE (64), so new cols still fit in 1 col_block
+        n.expand(2, 40, 2, 40);
+
+        assert_eq!(n.rows(), 2);
+        assert_eq!(n.cols(), 40);
+        assert_eq!(n.col_blocks, 1);
+
+        for i in 0..2 {
+            for j in 0..3 {
+                assert_eq!(n[(i, j)], m[(i, j)]);
+            }
+            for j in 3..40 {
+                assert!(!n[(i, j)], "expected zero at ({i},{j})");
+            }
+        }
+    }
+
+    // Expand with pad_rows > new_rows and pad_cols > new_cols.
+    // The allocated data should cover the full padded size, but logical size
+    // reflects new_rows/new_cols.
+    #[test]
+    fn expand_with_extra_padding() {
+        let m = BitMatrix::build(2, 3, |i, j| (i + j) % 2 == 0);
+        let mut n = m.clone();
+        // Logical 4x5, but allocate 8 rows and 128 cols (2 col_blocks)
+        n.expand(4, 5, 8, 128);
+
+        assert_eq!(n.rows(), 4);
+        assert_eq!(n.cols(), 5);
+        assert_eq!(n.col_blocks, min_blocks(128)); // 2 col_blocks
+        assert_eq!(n.data.len(), 8 * min_blocks(128)); // 8 rows * 2 blocks
+
+        for i in 0..2 {
+            for j in 0..3 {
+                assert_eq!(n[(i, j)], m[(i, j)]);
+            }
+        }
+        for i in 0..4 {
+            for j in 0..5 {
+                if i >= 2 || j >= 3 {
+                    assert!(!n[(i, j)], "expected zero at ({i},{j})");
+                }
+            }
+        }
+    }
+
+    // Extra padding in rows enables a subsequent expand to take the fast path
+    // (no reallocation) because new_rows fits within already-allocated space.
+    #[test]
+    fn expand_row_padding_enables_fast_path() {
+        let m = BitMatrix::build(2, 3, |i, j| i == j);
+        let mut n = m.clone();
+        // new_rows=3 > alloc_rows=2, so this triggers reallocation with pad_rows=8
+        n.expand(3, 3, 8, 64);
+        assert_eq!(n.col_blocks, 1);
+        assert_eq!(n.data.len(), 8); // 8 rows * 1 block allocated
+
+        // Growing to 5 rows fits within the already-allocated 8 rows → fast path,
+        // col_blocks and data.len() stay the same
+        n.expand(5, 3, 8, 64);
+        assert_eq!(n.rows(), 5);
+        assert_eq!(n.cols(), 3);
+        assert_eq!(n.col_blocks, 1);
+        assert_eq!(n.data.len(), 8); // unchanged
+
+        for i in 0..2 {
+            for j in 0..3 {
+                assert_eq!(n[(i, j)], m[(i, j)]);
+            }
+        }
+        for i in 2..5 {
+            for j in 0..3 {
+                assert!(!n[(i, j)], "expected zero at ({i},{j})");
+            }
         }
     }
 
