@@ -182,6 +182,22 @@ impl PyBitMatrix {
             .collect()
     }
 
+    /// Returns a matrix with the same rowspace as this one in which every
+    /// column has Hamming weight at most 2, or None if no such matrix exists
+    /// (i.e. the binary matroid represented by the columns is not graphic).
+    /// Uses the Bixby-Wagner graph-realization algorithm.
+    pub fn graphic_form(&self) -> Option<PyBitMatrix> {
+        self.inner.graphic_form().map(|m| PyBitMatrix { inner: m })
+    }
+
+    /// Like graphic_form, but always returns a matrix with the same rowspace,
+    /// together with the sorted list of columns whose Hamming weight could
+    /// not be reduced to at most 2 (empty exactly when graphic_form succeeds)
+    pub fn graphic_form_partial(&self) -> (PyBitMatrix, Vec<usize>) {
+        let (m, skipped) = self.inner.graphic_form_partial();
+        (PyBitMatrix { inner: m }, skipped)
+    }
+
     /// Returns a copy of the matrix
     pub fn copy(&self) -> Self {
         PyBitMatrix {

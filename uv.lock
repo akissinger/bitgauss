@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.9"
 
 [manifest]
@@ -19,7 +19,7 @@ dev = [
 
 [[package]]
 name = "bitgauss"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "pybindings" }
 
 [package.optional-dependencies]

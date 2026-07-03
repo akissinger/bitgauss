@@ -227,12 +227,41 @@ class BitMatrix:
     def nullspace(self) -> List['BitMatrix']:
         """
         Compute a basis for the nullspace of the matrix.
-        
+
         Returns:
             List of BitMatrix instances representing basis vectors
         """
         ...
-    
+
+    def graphic_form(self) -> Optional['BitMatrix']:
+        """
+        Return a matrix with the same rowspace in which every column has
+        Hamming weight at most 2, or None if no such matrix exists (i.e. the
+        binary matroid represented by the columns is not graphic).
+
+        Uses the Bixby-Wagner graph-realization algorithm. On success the
+        result has full row rank, i.e. rank() rows.
+
+        Returns:
+            The rewritten matrix, or None if the matrix is not graphic
+        """
+        ...
+
+    def graphic_form_partial(self) -> Tuple['BitMatrix', List[int]]:
+        """
+        Like graphic_form, but always return a matrix with the same rowspace,
+        together with the sorted list of columns whose Hamming weight could
+        not be reduced to at most 2.
+
+        Fundamental circuits that cannot be realized are skipped greedily, so
+        every column not in the returned list has weight at most 2. The list
+        is empty exactly when graphic_form succeeds.
+
+        Returns:
+            Tuple of (rewritten matrix, list of unreduced column indices)
+        """
+        ...
+
     def copy(self) -> 'BitMatrix':
         """
         Return a copy of the matrix.

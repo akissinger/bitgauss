@@ -497,5 +497,60 @@ class TestBitMatrixIntegration:
         ns = m1.nullspace()    # Returns a spanning set for the nullspace
 
 
+class TestGraphicForm:
+    """Test the Bixby-Wagner graphic form methods."""
+
+    @staticmethod
+    def column_weight(matrix, j):
+        return sum(1 for i in range(matrix.rows) if matrix[i, j])
+
+    @staticmethod
+    def same_rowspace(a, b):
+        rank = a.rank()
+        return rank == b.rank() and a.vstack(b).rank() == rank
+
+    @staticmethod
+    def incidence_k4():
+        """Vertex-edge incidence matrix of the complete graph K4."""
+        pairs = [(u, v) for u in range(4) for v in range(u + 1, 4)]
+        return BitMatrix.build(4, len(pairs), lambda i, j: i in pairs[j])
+
+    @staticmethod
+    def fano():
+        """The Fano plane F7, the smallest non-graphic binary matroid."""
+        return BitMatrix.build(3, 7, lambda i, j: (j + 1) & (1 << i) != 0)
+
+    def test_graphic_form_on_incidence_matrix(self):
+        """A scrambled incidence matrix should be recognized as graphic."""
+        m = BitMatrix.random_invertible(4, seed=1) * self.incidence_k4()
+        n = m.graphic_form()
+        assert n is not None
+        assert n.rows == m.rank()
+        assert self.same_rowspace(m, n)
+        assert all(self.column_weight(n, j) <= 2 for j in range(n.cols))
+
+    def test_graphic_form_on_non_graphic(self):
+        """The Fano plane has no graphic form."""
+        assert self.fano().graphic_form() is None
+
+    def test_graphic_form_partial_on_graphic(self):
+        """On graphic inputs, the partial form skips nothing."""
+        m = self.incidence_k4()
+        n, skipped = m.graphic_form_partial()
+        assert skipped == []
+        assert n == m.graphic_form()
+
+    def test_graphic_form_partial_on_non_graphic(self):
+        """On non-graphic inputs, the partial form still preserves the rowspace."""
+        m = self.fano()
+        n, skipped = m.graphic_form_partial()
+        assert len(skipped) > 0
+        assert n.rows == m.rank()
+        assert self.same_rowspace(m, n)
+        for j in range(n.cols):
+            if j not in skipped:
+                assert self.column_weight(n, j) <= 2
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
