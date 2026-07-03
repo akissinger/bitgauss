@@ -139,6 +139,10 @@ impl BitMatrix {
         }
     }
 
+    /// Expands the matrix to a new size, padding with 0s as necessary. The new size must be at least
+    /// as large as the current size. Extra space can be allocated using `pad_rows` and `pad_cols` to
+    /// make space for future growth. If the new size fits within the already-allocated space, no
+    /// reallocation will occur.
     #[inline]
     pub fn expand(&mut self, new_rows: usize, new_cols: usize, pad_rows: usize, pad_cols: usize) {
         if new_rows < self.rows || new_cols < self.cols {
@@ -387,7 +391,7 @@ impl BitMatrix {
 
     /// Performs gaussian elimination while also performing matching row operations on `proxy`
     /// and returns a vector of pivot columns.
-    fn gauss_helper(
+    pub(crate) fn gauss_helper(
         &mut self,
         full: bool,
         chunksize: usize,

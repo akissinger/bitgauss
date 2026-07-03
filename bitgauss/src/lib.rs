@@ -5,6 +5,8 @@
 //! - horizontal and vertical concatenation of matrices
 //! - matrix multiplication
 //! - Gaussian elimination and related methods (e.g. rank and inverse)
+//! - Bixby-Wagner graph realization, for rewriting a matrix so that every column has
+//!   Hamming weight at most 2 while preserving its rowspace
 //!
 //! The two main data structures provided by this crate are:
 //! - [`BitVec`]: a vector of bits stored in 64-bit chunks, along with convenience
@@ -16,6 +18,7 @@
 pub mod bitmatrix;
 pub mod bitvector;
 pub mod data;
+pub mod graphic;
 
 pub use bitmatrix::{BitMatrix, RowOps};
 pub use bitvector::BitVector;
