@@ -33,60 +33,131 @@ impl BitMatrix {
         let cols = self.cols();
         let mut rref = self.clone();
         let pcols = rref.gauss_helper(true, 1, &mut ());
-        let rank = pcols.len();
-        if rank == 0 {
+        if pcols.is_empty() {
             return Some(BitMatrix::zeros(0, cols));
         }
 
-        let mut is_pivot = vec![false; cols];
-        for &p in &pcols {
-            is_pivot[p] = true;
-        }
-
-        // The pivot columns of the RREF are a basis ("tree edges", numbered by
-        // their row 0..rank). Each nonzero non-pivot column is a "cotree edge"
-        // whose fundamental circuit is the set of tree edges it depends on,
-        // read off its column of the RREF.
-        let mut circuits: Vec<(usize, Vec<usize>)> = Vec::new();
-        for (j, &pivot) in is_pivot.iter().enumerate() {
-            if pivot {
-                continue;
-            }
-            let circuit: Vec<usize> = (0..rank).filter(|&i| rref.bit(i, j)).collect();
-            if !circuit.is_empty() {
-                circuits.push((j, circuit));
-            }
-        }
-
-        let blocks = decompose_blocks(rank, &circuits);
-
-        let mut td = TDecomp::new(rank);
-        for block in &blocks {
-            let block_circuits: Vec<(usize, &[usize])> = block
-                .iter()
-                .map(|&ci| (circuits[ci].0, circuits[ci].1.as_slice()))
-                .collect();
-            if !td.realization(&block_circuits) {
-                return None;
-            }
-        }
-
-        // Endpoints (vertex pair) of the edge realizing each matrix column.
-        // Zero columns are realized by self-loops and stay `None` (all-zero).
-        let mut endpoints: Vec<Option<(usize, usize)>> = vec![None; cols];
-        let mut num_vertices = td.extract_endpoints(&pcols, &mut endpoints);
-
-        // Tree edges that occur in no circuit are isolated bridges: realize
-        // each as an edge between two fresh vertices of its own.
-        for i in 0..rank {
-            if td.tree_edge[i].is_none() {
-                endpoints[pcols[i]] = Some((num_vertices, num_vertices + 1));
-                num_vertices += 2;
-            }
-        }
-
-        Some(incidence_with_full_row_rank(num_vertices, &endpoints))
+        let circuits = fundamental_circuits(&rref, &pcols);
+        let mut td = try_realize(pcols.len(), &circuits).ok()?;
+        Some(assemble_incidence(&mut td, &pcols, cols))
     }
+
+    /// Like [`graphic_form`](Self::graphic_form), but always returns a matrix
+    /// with the same rowspace as `self`, together with the sorted list of
+    /// columns whose Hamming weight could not be reduced to at most 2.
+    ///
+    /// Fundamental circuits that cannot be added to the realization are
+    /// skipped greedily and the rest realized as a graph, so every column not
+    /// in the returned list has weight at most 2. Each skipped column is
+    /// forced by linearity to be the XOR of the spanning-forest columns of its
+    /// fundamental circuit (the vertex boundary of that edge set), so its
+    /// weight can exceed 2 — although occasionally it may still come out
+    /// small.
+    ///
+    /// The returned list is empty exactly when `graphic_form` returns `Some`.
+    /// The skipped set is maximal with respect to the greedy insertion order,
+    /// not a minimum one, so it can depend on the column order of `self`.
+    pub fn graphic_form_partial(&self) -> (BitMatrix, Vec<usize>) {
+        let cols = self.cols();
+        let mut rref = self.clone();
+        let pcols = rref.gauss_helper(true, 1, &mut ());
+        if pcols.is_empty() {
+            return (BitMatrix::zeros(0, cols), Vec::new());
+        }
+
+        let mut circuits = fundamental_circuits(&rref, &pcols);
+        let mut skipped: Vec<(usize, Vec<usize>)> = Vec::new();
+        let mut td = loop {
+            match try_realize(pcols.len(), &circuits) {
+                Ok(td) => break td,
+                // drop the offending circuit and rerun: a failed insertion
+                // leaves the t-decomposition mid-mutation, and removing a
+                // circuit can also split a block, so the cheapest sound
+                // recovery is to redo the (near-linear) realization
+                Err(ci) => skipped.push(circuits.remove(ci)),
+            }
+        };
+        let mut result = assemble_incidence(&mut td, &pcols, cols);
+
+        // Any basis of the rowspace forces each skipped column to be the XOR
+        // of the spanning-forest columns in its fundamental circuit.
+        for (j, circuit) in &skipped {
+            for &i in circuit {
+                for row in 0..result.rows() {
+                    if result.bit(row, pcols[i]) {
+                        let b = result.bit(row, *j);
+                        result.set_bit(row, *j, !b);
+                    }
+                }
+            }
+        }
+
+        let mut skipped_cols: Vec<usize> = skipped.into_iter().map(|(j, _)| j).collect();
+        skipped_cols.sort_unstable();
+        (result, skipped_cols)
+    }
+}
+
+/// Reads the fundamental circuits off a reduced row echelon form: the pivot
+/// columns are a basis ("tree edges", numbered by their row `0..rank`), and
+/// each nonzero non-pivot column is a "cotree edge" whose circuit is the set
+/// of tree edges it depends on. Returns `(column, circuit)` pairs.
+fn fundamental_circuits(rref: &BitMatrix, pcols: &[usize]) -> Vec<(usize, Vec<usize>)> {
+    let mut is_pivot = vec![false; rref.cols()];
+    for &p in pcols {
+        is_pivot[p] = true;
+    }
+
+    let mut circuits: Vec<(usize, Vec<usize>)> = Vec::new();
+    for (j, &pivot) in is_pivot.iter().enumerate() {
+        if pivot {
+            continue;
+        }
+        let circuit: Vec<usize> = (0..pcols.len()).filter(|&i| rref.bit(i, j)).collect();
+        if !circuit.is_empty() {
+            circuits.push((j, circuit));
+        }
+    }
+    circuits
+}
+
+/// Runs the Bixby-Wagner realization on all circuits, block by block. Returns
+/// the resulting t-decomposition, or the index (into `circuits`) of the first
+/// circuit that could not be realized.
+fn try_realize(rank: usize, circuits: &[(usize, Vec<usize>)]) -> Result<TDecomp, usize> {
+    let blocks = decompose_blocks(rank, circuits);
+    let mut td = TDecomp::new(rank);
+    for block in &blocks {
+        let block_circuits: Vec<(usize, &[usize])> = block
+            .iter()
+            .map(|&ci| (circuits[ci].0, circuits[ci].1.as_slice()))
+            .collect();
+        if let Err(pos) = td.realization(&block_circuits) {
+            return Err(block[pos]);
+        }
+    }
+    Ok(td)
+}
+
+/// Builds the output matrix from a completed realization: extracts the
+/// endpoints of the edge realizing each matrix column and assembles the
+/// full-row-rank incidence matrix.
+fn assemble_incidence(td: &mut TDecomp, pcols: &[usize], cols: usize) -> BitMatrix {
+    // Endpoints (vertex pair) of the edge realizing each matrix column.
+    // Zero columns are realized by self-loops and stay `None` (all-zero).
+    let mut endpoints: Vec<Option<(usize, usize)>> = vec![None; cols];
+    let mut num_vertices = td.extract_endpoints(pcols, &mut endpoints);
+
+    // Tree edges that occur in no circuit are isolated bridges: realize
+    // each as an edge between two fresh vertices of its own.
+    for i in 0..pcols.len() {
+        if td.tree_edge[i].is_none() {
+            endpoints[pcols[i]] = Some((num_vertices, num_vertices + 1));
+            num_vertices += 2;
+        }
+    }
+
+    incidence_with_full_row_rank(num_vertices, &endpoints)
 }
 
 /// Splits the circuits into 1-connected blocks (port of Java `MatrixDivide`):
@@ -982,8 +1053,11 @@ impl TDecomp {
     // ------------------------------------------------------------------
 
     /// Java `TDecomposition.realization(ArrayList)`: realizes one block of
-    /// circuits, given as `(original column, fundamental circuit)` pairs
-    fn realization(&mut self, block: &[(usize, &[usize])]) -> bool {
+    /// circuits, given as `(original column, fundamental circuit)` pairs.
+    /// On failure returns the position within `block` of the offending
+    /// circuit; the t-decomposition is then left mid-mutation and must not be
+    /// used for further insertions.
+    fn realization(&mut self, block: &[(usize, &[usize])]) -> Result<(), usize> {
         let (first_col, first_circuit) = block[0];
         let first_edge = first_circuit[0];
         // seed bond: a dummy edge (Java `treeEdge[0]`) parallel to the first
@@ -995,12 +1069,12 @@ impl TDecomp {
         // Java ignores the result of the first addCircuit: with only the
         // seed bond present it cannot fail
         let _ = self.add_circuit(first_col, first_circuit);
-        for &(col, circuit) in &block[1..] {
+        for (pos, &(col, circuit)) in block.iter().enumerate().skip(1) {
             if !self.add_circuit(col, circuit) {
-                return false;
+                return Err(pos);
             }
         }
-        true
+        Ok(())
     }
 
     /// Java `TDecomposition.addCircuit(int[])`
@@ -2332,5 +2406,82 @@ mod test {
         let mut rng = SmallRng::seed_from_u64(9);
         let inc = random_graph_incidence(&mut rng, 6, 10);
         check_graphic(&inc.vstack(&inc));
+    }
+
+    fn column_weight(m: &BitMatrix, j: usize) -> usize {
+        (0..m.rows()).filter(|&i| m.bit(i, j)).count()
+    }
+
+    /// checks the `graphic_form_partial` contract and returns the skipped columns
+    fn check_partial(m: &BitMatrix) -> Vec<usize> {
+        let (n, skipped) = m.graphic_form_partial();
+        assert_eq!(n.rows(), m.rank(), "output does not have full row rank");
+        assert!(same_rowspace(m, &n), "rowspace changed:\n{}\n->\n{}", m, n);
+        for j in 0..n.cols() {
+            if !skipped.contains(&j) {
+                assert!(
+                    column_weight(&n, j) <= 2,
+                    "unskipped column {} has weight > 2 in\n{}",
+                    j,
+                    n
+                );
+            }
+        }
+        assert_eq!(
+            skipped.is_empty(),
+            m.graphic_form().is_some(),
+            "skipped columns must be empty exactly for graphic inputs"
+        );
+        skipped
+    }
+
+    #[test]
+    fn partial_matches_on_graphic_inputs() {
+        let mut rng = SmallRng::seed_from_u64(11);
+        for _ in 0..10 {
+            let inc = random_graph_incidence(&mut rng, 8, 20);
+            let m = scramble_rows(&mut rng, &inc);
+            let (n, skipped) = m.graphic_form_partial();
+            assert!(skipped.is_empty());
+            assert_eq!(Some(n), m.graphic_form());
+        }
+    }
+
+    #[test]
+    fn partial_on_fano() {
+        let f7 = BitMatrix::build(3, 7, |i, j| (j + 1) & (1 << i) != 0);
+        assert!(!check_partial(&f7).is_empty());
+    }
+
+    #[test]
+    fn partial_on_dual_k5() {
+        let dual = dual_basis(&complete_graph_incidence(5));
+        assert!(!check_partial(&dual).is_empty());
+        let mut rng = SmallRng::seed_from_u64(55);
+        assert!(!check_partial(&scramble_rows(&mut rng, &dual)).is_empty());
+    }
+
+    // dense random matrices are almost never graphic, so this exercises the
+    // greedy skip-and-restart loop heavily
+    #[test]
+    fn partial_on_random_matrices() {
+        let mut rng = SmallRng::seed_from_u64(77);
+        for _ in 0..30 {
+            let rows = rng.random_range(1..10);
+            let cols = rng.random_range(1..30);
+            let m = BitMatrix::random(&mut rng, rows, cols);
+            check_partial(&m);
+        }
+    }
+
+    #[test]
+    fn partial_on_trivial_inputs() {
+        let (n, skipped) = BitMatrix::zeros(0, 0).graphic_form_partial();
+        assert_eq!((n.rows(), n.cols()), (0, 0));
+        assert!(skipped.is_empty());
+
+        let (n, skipped) = BitMatrix::zeros(3, 4).graphic_form_partial();
+        assert_eq!((n.rows(), n.cols()), (0, 4));
+        assert!(skipped.is_empty());
     }
 }
