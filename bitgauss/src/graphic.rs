@@ -11,13 +11,15 @@
 //! > R. Bixby and D. Wagner, *An almost linear-time algorithm for graph
 //! > realization*, Mathematics of Operations Research 13 (1988), pp. 99-123.
 //!
-//! This module is a port of the Java reference implementation of that
-//! algorithm by Takahiro Ohto (`GRP.java`, 2003), which maintains a
-//! *t-decomposition* of the graph built so far: a tree of *members* (polygons,
-//! bonds and prime graphs) glued along virtual *marker* edge pairs. Doc
-//! comments on the items below name the corresponding Java classes and
-//! methods; the port keeps the reference control flow so it can be audited
-//! against `GRP.java` line by line.
+//! This module is a direct port of a Java implementation of the Bixby-Wagner
+//! algorithm by Takahiro Ohto (Copyright (C) 2001-2003).  It is
+//! dual licensed under 3-clause BSD (following the original) and Apache 2.0
+//! (following the rest of the BitGauss project).
+//!
+//! The port was produced by Claude Fable 5 and maintains the same control flow
+//! and data structures, so it can be checked against the original line by line,
+//! see `docs/graphic/GRP.java`. The original 18 unit tests were also produced by
+//! the LLM and checked by a human.
 
 use crate::bitmatrix::BitMatrix;
 
