@@ -79,6 +79,54 @@ let ns = m1.nullspace();    // Returns a spanning set for the nullspace
 
 For more info, have a look at the [Python documentation](https://bitgauss.readthedocs.io/en/latest/), the [Rust documentation](https://docs.rs/bitgauss), or the Jupyter notebook [getting_started.ipynb](https://github.com/akissinger/bitgauss/blob/main/demo/getting_started.ipynb).
 
+
+# Graphic form
+
+This library also contains methods for converting matrices to graphic form using the Bixby-Wagner algorithm. For a given matrix, this will try to find another matrix with the same rowspace whose columns have Hamming weight at most 2. This is
+a useful transformation e.g. for error correcting codes. Here's an example:
+
+```rust
+use bitmatrix::BitMatrix;
+
+let m = BitMatrix::from_int_vec(&vec![
+    vec![1, 1, 0, 1, 1],
+    vec![0, 1, 1, 1, 0],
+    vec![1, 1, 1, 0, 0],
+]);
+
+let n = m.graphic_form().unwrap();
+println!("graphic form:\n{}", n);
+// graphic form:
+//  1  0  1  0  1 
+//  0  1  0  0  1 
+//  0  1  1  1  0
+```
+
+This method returns `None` if the matrix cannot be put into graphic form. Alternatively, the method
+`graphic_form_partial` will try to put the matrix into graphic form and return a pair consisting of
+a partial solution and a list of hyperedge columns, i.e. those whose Hamming weight is still above 2.
+
+
+```rust
+use bitmatrix::BitMatrix;
+
+let m = BitMatrix::from_int_vec(&vec![
+    vec![1, 1, 0, 1, 1, 0, 0],
+    vec![0, 1, 1, 1, 0, 1, 0],
+    vec![1, 1, 1, 0, 0, 0, 1],
+]);
+
+let (n, hyper) = m.graphic_form_partial();
+println!("partial graphic form:\n{}", n);
+println!("hyperedge columns: {:?}", hyper);
+// partial graphic form:
+//  1  1  0  1  1  0  0 
+//  1  0  1  0  1  1  0 
+//  0  1  0  0  1  1  1 
+// 
+// hyperedge columns: [4]
+```
+
 # Performance
 
 The `BitMatrix` class is substantially faster than a pure Python implementation of a binary matrix without bitpacking. For example, in [getting_started.ipynb](https://github.com/akissinger/bitgauss/blob/main/demo/getting_started.ipynb) there is a calculation that is more than 100X faster using `bitgauss`:
@@ -98,4 +146,4 @@ The difference is probably less pronounced with `numpy` or other fast compiled l
 
 ## A note on SIMD
 
-`bitgauss` is designed to take advantage of the fact that modern hardware and compilers are able to process many bit-entries at once using [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data). While this package doesn't explicitly use SIMD (via e.g. the experimental [std::simd](https://doc.rust-lang.org/std/simd/index.html) module in nightly Rust), it relies on the fact that [LLVM](https://llvm.org/), which the Rust compiler uses under the hood, is already very good at using SIMD automatically when needed and available. My experiments and benchmarking, this seems to almost always do better than introducing SIMD instructions by hand. Please keep this in mind before you spend a lot of time writing a PR that adds explicit SIMD instructions. Basically, don't do what I did. :)
+`bitgauss` is designed to take advantage of the fact that modern hardware and compilers are able to process many bit-entries at once using [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data). While this package doesn't explicitly use SIMD (via e.g. the experimental [std::simd](https://doc.rust-lang.org/std/simd/index.html) module in nightly Rust), it relies on the fact that [LLVM](https://llvm.org/), which the Rust compiler uses under the hood, is already very good at using SIMD automatically when needed and available. From my experiments and benchmarking, this seems to almost always do better than introducing SIMD instructions by hand. Please keep this in mind before you spend a lot of time writing a PR that adds explicit SIMD instructions. Basically, don't do what I did. :)

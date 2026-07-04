@@ -2381,6 +2381,19 @@ mod test {
     }
 
     #[test]
+    fn simple_graphic_ex() {
+        let m = BitMatrix::from_int_vec(&vec![
+            vec![1, 1, 0, 1, 1],
+            vec![0, 1, 1, 1, 0],
+            vec![1, 1, 1, 0, 0],
+        ]);
+
+        let n = m.graphic_form().unwrap();
+        println!("graphic form:\n{}", n);
+        check_graphic(&m);
+    }
+
+    #[test]
     fn single_entry_and_row() {
         check_graphic(&BitMatrix::build(1, 1, |_, _| true));
         // a single all-ones row realizes as a bundle of parallel edges
@@ -2447,6 +2460,20 @@ mod test {
             assert!(skipped.is_empty());
             assert_eq!(Some(n), m.graphic_form());
         }
+    }
+
+    #[test]
+    fn simple_partial_graphic_ex() {
+        let m = BitMatrix::from_int_vec(&vec![
+            vec![1, 1, 0, 1, 1, 0, 0],
+            vec![0, 1, 1, 1, 0, 1, 0],
+            vec![1, 1, 1, 0, 0, 0, 1],
+        ]);
+
+        let (n, hyper) = m.graphic_form_partial();
+        println!("partial graphic form:\n{}", n);
+        println!("hyperedge columns: {:?}", hyper);
+        assert_eq!(hyper.len(), 1);
     }
 
     #[test]
