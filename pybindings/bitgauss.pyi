@@ -235,30 +235,41 @@ class BitMatrix:
 
     def graphic_form(self) -> Optional['BitMatrix']:
         """
-        Return a matrix with the same rowspace in which every column has
+        Return a matrix G with the same rowspace in which every column has
         Hamming weight at most 2, or None if no such matrix exists (i.e. the
         binary matroid represented by the columns is not graphic).
 
-        Uses the Bixby-Wagner graph-realization algorithm. On success the
-        result has full row rank, i.e. rank() rows.
+        Uses the Bixby-Wagner graph-realization algorithm. On success G has
+        full row rank, i.e. rank() rows.
 
         Returns:
             The rewritten matrix, or None if the matrix is not graphic
         """
         ...
 
-    def graphic_form_partial(self) -> Tuple['BitMatrix', List[int]]:
+    def graphic_form_with_options(
+        self, partial: bool = False, basis_change: bool = False
+    ) -> Tuple[Optional['BitMatrix'], Optional['BitMatrix'], List[int]]:
         """
-        Like graphic_form, but always return a matrix with the same rowspace,
-        together with the sorted list of columns whose Hamming weight could
-        not be reduced to at most 2.
+        Generalization of graphic_form returning (G, B, skipped), where B is
+        the basis-change matrix satisfying G == B * self and skipped is the
+        sorted list of columns whose Hamming weight could not be reduced to
+        at most 2.
 
-        Fundamental circuits that cannot be realized are skipped greedily, so
-        every column not in the returned list has weight at most 2. The list
-        is empty exactly when graphic_form succeeds.
+        With partial=False, G is None when the matrix is not graphic and
+        skipped is always empty. With partial=True, G is always returned:
+        fundamental circuits that cannot be realized are skipped greedily,
+        so every column not in skipped has weight at most 2; skipped is
+        empty exactly when the matrix is graphic.
+
+        Args:
+            partial: skip unrealizable circuits instead of returning None
+            basis_change: also compute the basis-change matrix B
 
         Returns:
-            Tuple of (rewritten matrix, list of unreduced column indices)
+            Tuple of (rewritten matrix or None, basis-change matrix or None,
+            list of unreduced column indices). B is only computed when
+            basis_change=True, and is returned whenever G is.
         """
         ...
 

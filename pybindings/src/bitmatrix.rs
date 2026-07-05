@@ -182,7 +182,7 @@ impl PyBitMatrix {
             .collect()
     }
 
-    /// Returns a matrix with the same rowspace as this one in which every
+    /// Returns a matrix G with the same rowspace as this one in which every
     /// column has Hamming weight at most 2, or None if no such matrix exists
     /// (i.e. the binary matroid represented by the columns is not graphic).
     /// Uses the Bixby-Wagner graph-realization algorithm.
@@ -190,12 +190,25 @@ impl PyBitMatrix {
         self.inner.graphic_form().map(|m| PyBitMatrix { inner: m })
     }
 
-    /// Like graphic_form, but always returns a matrix with the same rowspace,
-    /// together with the sorted list of columns whose Hamming weight could
-    /// not be reduced to at most 2 (empty exactly when graphic_form succeeds)
-    pub fn graphic_form_partial(&self) -> (PyBitMatrix, Vec<usize>) {
-        let (m, skipped) = self.inner.graphic_form_partial();
-        (PyBitMatrix { inner: m }, skipped)
+    /// Generalization of graphic_form returning (G, B, skipped), where B is
+    /// the basis-change matrix satisfying G == B * self and skipped is the
+    /// sorted list of columns whose Hamming weight could not be reduced to
+    /// at most 2. With partial=False, G is None when the matrix is not
+    /// graphic and skipped is always empty; with partial=True, G is always
+    /// returned and every column not in skipped has weight at most 2. B is
+    /// only computed when basis_change=True, and is returned whenever G is.
+    #[pyo3(signature = (partial=false, basis_change=false))]
+    pub fn graphic_form_with_options(
+        &self,
+        partial: bool,
+        basis_change: bool,
+    ) -> (Option<PyBitMatrix>, Option<PyBitMatrix>, Vec<usize>) {
+        let (m, b, skipped) = self.inner.graphic_form_with_options(partial, basis_change);
+        (
+            m.map(|m| PyBitMatrix { inner: m }),
+            b.map(|b| PyBitMatrix { inner: b }),
+            skipped,
+        )
     }
 
     /// Returns a copy of the matrix

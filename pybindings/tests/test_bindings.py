@@ -523,33 +523,44 @@ class TestGraphicForm:
     def test_graphic_form_on_incidence_matrix(self):
         """A scrambled incidence matrix should be recognized as graphic."""
         m = BitMatrix.random_invertible(4, seed=1) * self.incidence_k4()
-        n = m.graphic_form()
+        n, b, skipped = m.graphic_form_with_options(basis_change=True)
         assert n is not None
+        assert skipped == []
         assert n.rows == m.rank()
         assert self.same_rowspace(m, n)
         assert all(self.column_weight(n, j) <= 2 for j in range(n.cols))
+        assert b * m == n
 
     def test_graphic_form_on_non_graphic(self):
         """The Fano plane has no graphic form."""
         assert self.fano().graphic_form() is None
+        assert self.fano().graphic_form_with_options() == (None, None, [])
 
     def test_graphic_form_partial_on_graphic(self):
         """On graphic inputs, the partial form skips nothing."""
         m = self.incidence_k4()
-        n, skipped = m.graphic_form_partial()
+        n, b, skipped = m.graphic_form_with_options(partial=True, basis_change=True)
         assert skipped == []
         assert n == m.graphic_form()
+        assert b * m == n
 
     def test_graphic_form_partial_on_non_graphic(self):
         """On non-graphic inputs, the partial form still preserves the rowspace."""
         m = self.fano()
-        n, skipped = m.graphic_form_partial()
+        n, b, skipped = m.graphic_form_with_options(partial=True, basis_change=True)
         assert len(skipped) > 0
         assert n.rows == m.rank()
         assert self.same_rowspace(m, n)
+        assert b * m == n
         for j in range(n.cols):
             if j not in skipped:
                 assert self.column_weight(n, j) <= 2
+
+    def test_graphic_form_without_basis_change(self):
+        """B is only computed when basis_change=True."""
+        m = self.incidence_k4()
+        n, b, skipped = m.graphic_form_with_options()
+        assert n is not None and b is None and skipped == []
 
 
 if __name__ == "__main__":

@@ -94,35 +94,41 @@ let m = BitMatrix::from_int_vec(&vec![
     vec![1, 1, 1, 0, 0],
 ]);
 
-let n = m.graphic_form().unwrap();
+let (n, b) = m.graphic_form().unwrap();
 println!("graphic form:\n{}", n);
 // graphic form:
 //  1  0  1  0  1 
 //  0  1  0  0  1 
 //  0  1  1  1  0
+assert_eq!(&b * &m, n); // b is the basis-change matrix
 ```
 
-This method returns `None` if the matrix cannot be put into graphic form. Alternatively, the method
-`graphic_form_partial` will try to put the matrix into graphic form and return a pair consisting of
-a partial solution and a list of hyperedge columns, i.e. those whose Hamming weight is still above 2.
-
+This method returns `None` if the matrix cannot be put into graphic form. Alternatively, the helper method `graphic_form_with_options` takes two boolean arguments, `partial` and `basis_change`, which allow partial solutions and the basis-change matrix to be returned, respectively. It returns a triple consisting of the (optional) graphic form, the (optional) basis-change matrix, and a list of hyperedge columns, i.e. those whose weight is greater than 2.
 
 ```rust
 use bitmatrix::BitMatrix;
 
+// this matrix cannot be put into graphic form, but we can
+// still get a partial solution
 let m = BitMatrix::from_int_vec(&vec![
     vec![1, 1, 0, 1, 1, 0, 0],
     vec![0, 1, 1, 1, 0, 1, 0],
     vec![1, 1, 1, 0, 0, 0, 1],
 ]);
 
-let (n, hyper) = m.graphic_form_partial();
-println!("partial graphic form:\n{}", n);
+let (n, b, hyper) = m.graphic_form_with_options(true, true);
+println!("partial graphic form:\n{}", n.unwrap());
+println!("basis-change matrix:\n{}", b.unwrap());
 println!("hyperedge columns: {:?}", hyper);
 // partial graphic form:
 //  1  1  0  1  1  0  0 
 //  1  0  1  0  1  1  0 
 //  0  1  0  0  1  1  1 
+// 
+// basis-change matrix:
+//  1  0  0 
+//  1  1  0 
+//  1  1  1 
 // 
 // hyperedge columns: [4]
 ```

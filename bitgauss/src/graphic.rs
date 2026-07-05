@@ -24,47 +24,52 @@
 use crate::bitmatrix::BitMatrix;
 
 impl BitMatrix {
-    /// Returns a matrix with the same rowspace as `self` in which every column
-    /// has Hamming weight at most 2, or `None` if no such matrix exists.
+    /// Returns a matrix `g` with the same rowspace as `self` in which every
+    /// column has Hamming weight at most 2, or `None` if no such matrix
+    /// exists.
     ///
     /// Such a matrix exists precisely when the binary matroid represented by
     /// the columns of `self` is graphic, which is decided with the
-    /// Bixby-Wagner graph-realization algorithm. On success the result has
-    /// full row rank, i.e. `self.rank()` rows.
+    /// Bixby-Wagner graph-realization algorithm. On success `g` has full row
+    /// rank, i.e. `self.rank()` rows.
+    ///
+    /// Equivalent to `self.graphic_form_with_options(false, false).0`; see
+    /// [`graphic_form_with_options`](Self::graphic_form_with_options) for
+    /// partial realizations and the basis-change matrix.
     pub fn graphic_form(&self) -> Option<BitMatrix> {
-        let cols = self.cols();
-        let mut rref = self.clone();
-        let pcols = rref.gauss_helper(true, 1, &mut ());
-        if pcols.is_empty() {
-            return Some(BitMatrix::zeros(0, cols));
-        }
-
-        let circuits = fundamental_circuits(&rref, &pcols);
-        let mut td = try_realize(pcols.len(), &circuits).ok()?;
-        Some(assemble_incidence(&mut td, &pcols, cols))
+        self.graphic_form_with_options(false, false).0
     }
 
-    /// Like [`graphic_form`](Self::graphic_form), but always returns a matrix
-    /// with the same rowspace as `self`, together with the sorted list of
-    /// columns whose Hamming weight could not be reduced to at most 2.
+    /// Generalization of [`graphic_form`](Self::graphic_form) that can
+    /// optionally allow partial solutions and compute the basis-change matrix.
     ///
-    /// Fundamental circuits that cannot be added to the realization are
-    /// skipped greedily and the rest realized as a graph, so every column not
-    /// in the returned list has weight at most 2. Each skipped column is
-    /// forced by linearity to be the XOR of the spanning-forest columns of its
-    /// fundamental circuit (the vertex boundary of that edge set), so its
-    /// weight can exceed 2 — although occasionally it may still come out
-    /// small.
+    /// This returns a triple `(g, b, h)` where `g` and `b` are optional matrices
+    /// and `h` is a vector of column indices.
     ///
-    /// The returned list is empty exactly when `graphic_form` returns `Some`.
-    /// The skipped set is maximal with respect to the greedy insertion order,
-    /// not a minimum one, so it can depend on the column order of `self`.
-    pub fn graphic_form_partial(&self) -> (BitMatrix, Vec<usize>) {
+    /// If `partial == false`, then this method returns the graphic form of the
+    /// matrix as `g`, or `None` if no such form exists.
+    ///
+    /// If `partial == true`, then a matrix is always returned for `g`, but some
+    /// columns may have Hamming weight greater than 2. The indices of these
+    /// columns are returned as `h`.
+    ///
+    /// When `basis_change == true` and `g != None`, an invertible matrix `b`
+    /// is returned such that `g == b * self`.
+    pub fn graphic_form_with_options(
+        &self,
+        partial: bool,
+        basis_change: bool,
+    ) -> (Option<BitMatrix>, Option<BitMatrix>, Vec<usize>) {
         let cols = self.cols();
         let mut rref = self.clone();
-        let pcols = rref.gauss_helper(true, 1, &mut ());
+        let mut row_ops = basis_change.then(|| BitMatrix::identity(self.rows()));
+        let pcols = match row_ops.as_mut() {
+            Some(ops) => rref.gauss_helper(true, 1, ops),
+            None => rref.gauss_helper(true, 1, &mut ()),
+        };
         if pcols.is_empty() {
-            return (BitMatrix::zeros(0, cols), Vec::new());
+            let b = basis_change.then(|| BitMatrix::zeros(0, self.rows()));
+            return (Some(BitMatrix::zeros(0, cols)), b, Vec::new());
         }
 
         let mut circuits = fundamental_circuits(&rref, &pcols);
@@ -72,6 +77,7 @@ impl BitMatrix {
         let mut td = loop {
             match try_realize(pcols.len(), &circuits) {
                 Ok(td) => break td,
+                Err(_) if !partial => return (None, None, Vec::new()),
                 // drop the offending circuit and rerun: a failed insertion
                 // leaves the t-decomposition mid-mutation, and removing a
                 // circuit can also split a block, so the cheapest sound
@@ -96,8 +102,30 @@ impl BitMatrix {
 
         let mut skipped_cols: Vec<usize> = skipped.into_iter().map(|(j, _)| j).collect();
         skipped_cols.sort_unstable();
-        (result, skipped_cols)
+        let b = row_ops.map(|ops| self::basis_change(&result, &ops, &pcols));
+        (Some(result), b, skipped_cols)
     }
+}
+
+/// Expresses each row of `realized` as a combination of the rows of the
+/// original matrix, returning `b` with `realized == b * original`.
+///
+/// The rows of `realized` lie in the rowspace, and the RREF rows form a basis
+/// in which each basis vector is 1 on its own pivot column and 0 on the other
+/// pivot columns, so row `r` of `realized` is the XOR of the RREF rows `i`
+/// with `realized[(r, pcols[i])]` set. `row_ops` is the row-operation record
+/// of the elimination (the same operations applied to an identity matrix,
+/// so RREF row `i` equals `row_ops` row `i` times the original matrix).
+fn basis_change(realized: &BitMatrix, row_ops: &BitMatrix, pcols: &[usize]) -> BitMatrix {
+    let mut b = BitMatrix::zeros(realized.rows(), row_ops.cols());
+    for r in 0..realized.rows() {
+        for (i, &p) in pcols.iter().enumerate() {
+            if realized.bit(r, p) {
+                b.add_bits_to_row(row_ops.row(i), r);
+            }
+        }
+    }
+    b
 }
 
 /// Reads the fundamental circuits off a reduced row echelon form: the pivot
@@ -2281,10 +2309,14 @@ mod test {
     }
 
     fn check_graphic(m: &BitMatrix) {
-        let n = m.graphic_form().expect("matrix should be graphic");
+        let (n, b, skipped) = m.graphic_form_with_options(false, true);
+        let n = n.expect("matrix should be graphic");
+        let b = b.expect("basis change should be computed");
+        assert!(skipped.is_empty());
         assert!(column_weights_ok(&n), "column weight > 2 in\n{}", n);
         assert_eq!(n.rows(), m.rank(), "output does not have full row rank");
         assert!(same_rowspace(m, &n), "rowspace changed:\n{}\n->\n{}", m, n);
+        assert_eq!(&b * m, n, "basis change does not map input to output");
     }
 
     #[test]
@@ -2368,11 +2400,15 @@ mod test {
 
     #[test]
     fn empty_and_zero_matrices() {
-        let n = BitMatrix::zeros(0, 0).graphic_form().unwrap();
+        let (n, b, _) = BitMatrix::zeros(0, 0).graphic_form_with_options(false, true);
+        let (n, b) = (n.unwrap(), b.unwrap());
         assert_eq!((n.rows(), n.cols()), (0, 0));
+        assert_eq!((b.rows(), b.cols()), (0, 0));
 
-        let n = BitMatrix::zeros(3, 4).graphic_form().unwrap();
+        let (n, b, _) = BitMatrix::zeros(3, 4).graphic_form_with_options(false, true);
+        let (n, b) = (n.unwrap(), b.unwrap());
         assert_eq!((n.rows(), n.cols()), (0, 4));
+        assert_eq!((b.rows(), b.cols()), (0, 3));
     }
 
     #[test]
@@ -2427,11 +2463,13 @@ mod test {
         (0..m.rows()).filter(|&i| m.bit(i, j)).count()
     }
 
-    /// checks the `graphic_form_partial` contract and returns the skipped columns
+    /// checks the partial-realization contract and returns the skipped columns
     fn check_partial(m: &BitMatrix) -> Vec<usize> {
-        let (n, skipped) = m.graphic_form_partial();
+        let (n, b, skipped) = m.graphic_form_with_options(true, true);
+        let (n, b) = (n.unwrap(), b.unwrap());
         assert_eq!(n.rows(), m.rank(), "output does not have full row rank");
         assert!(same_rowspace(m, &n), "rowspace changed:\n{}\n->\n{}", m, n);
+        assert_eq!(&b * m, n, "basis change does not map input to output");
         for j in 0..n.cols() {
             if !skipped.contains(&j) {
                 assert!(
@@ -2456,9 +2494,11 @@ mod test {
         for _ in 0..10 {
             let inc = random_graph_incidence(&mut rng, 8, 20);
             let m = scramble_rows(&mut rng, &inc);
-            let (n, skipped) = m.graphic_form_partial();
+            let (n, b, skipped) = m.graphic_form_with_options(true, true);
+            let (n, b) = (n.unwrap(), b.unwrap());
             assert!(skipped.is_empty());
-            assert_eq!(Some(n), m.graphic_form());
+            assert_eq!(Some(n.clone()), m.graphic_form());
+            assert_eq!(&b * &m, n);
         }
     }
 
@@ -2470,10 +2510,14 @@ mod test {
             vec![1, 1, 1, 0, 0, 0, 1],
         ]);
 
-        let (n, hyper) = m.graphic_form_partial();
+        let (n, b, hyper) = m.graphic_form_with_options(true, true);
+        let n = n.unwrap();
+        let b = b.unwrap();
         println!("partial graphic form:\n{}", n);
+        println!("basis-change matrix:\n{}", b);
         println!("hyperedge columns: {:?}", hyper);
         assert_eq!(hyper.len(), 1);
+        assert_eq!(&b * &m, n);
     }
 
     #[test]
@@ -2505,12 +2549,16 @@ mod test {
 
     #[test]
     fn partial_on_trivial_inputs() {
-        let (n, skipped) = BitMatrix::zeros(0, 0).graphic_form_partial();
+        let (n, b, skipped) = BitMatrix::zeros(0, 0).graphic_form_with_options(true, true);
+        let (n, b) = (n.unwrap(), b.unwrap());
         assert_eq!((n.rows(), n.cols()), (0, 0));
+        assert_eq!((b.rows(), b.cols()), (0, 0));
         assert!(skipped.is_empty());
 
-        let (n, skipped) = BitMatrix::zeros(3, 4).graphic_form_partial();
+        let (n, b, skipped) = BitMatrix::zeros(3, 4).graphic_form_with_options(true, true);
+        let (n, b) = (n.unwrap(), b.unwrap());
         assert_eq!((n.rows(), n.cols()), (0, 4));
+        assert_eq!((b.rows(), b.cols()), (0, 3));
         assert!(skipped.is_empty());
     }
 }
