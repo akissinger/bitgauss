@@ -109,6 +109,11 @@ impl BitVector {
     pub fn as_row_vector(&self) -> &BitMatrix {
         &self.0
     }
+
+    #[inline]
+    pub fn expand(&mut self, new_size: usize, pad: usize) {
+        self.0.expand(1, new_size, 1, pad);
+    }
 }
 
 /// Formats the vector for display
