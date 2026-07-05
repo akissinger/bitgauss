@@ -2510,7 +2510,8 @@ mod test {
             vec![1, 1, 1, 0, 0, 0, 1],
         ]);
 
-        let (n, b, hyper) = m.graphic_form_with_options(true, true);
+        let (n, b, hyper) =
+            m.graphic_form_with_options(/*partial=*/ true, /*basis_change=*/ true);
         let n = n.unwrap();
         let b = b.unwrap();
         println!("partial graphic form:\n{}", n);

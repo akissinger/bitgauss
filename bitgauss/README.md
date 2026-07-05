@@ -116,9 +116,12 @@ let m = BitMatrix::from_int_vec(&vec![
     vec![1, 1, 1, 0, 0, 0, 1],
 ]);
 
-let (n, b, hyper) = m.graphic_form_with_options(true, true);
-println!("partial graphic form:\n{}", n.unwrap());
-println!("basis-change matrix:\n{}", b.unwrap());
+let (n, b, hyper) = m.graphic_form_with_options(/*partial=*/ true, /*basis_change=*/ true);
+let n = n.unwrap();
+let b = b.unwrap();
+assert_eq!(&b * &m, n);
+println!("partial graphic form:\n{}", n);
+println!("basis-change matrix:\n{}", b);
 println!("hyperedge columns: {:?}", hyper);
 // partial graphic form:
 //  1  1  0  1  1  0  0 
