@@ -741,6 +741,26 @@ impl BitMatrix {
 
         basis
     }
+    
+    // added by andi
+    pub fn nullspace_matrix(&self) -> BitMatrix {
+        let basis = self.nullspace();
+
+        let n = self.cols();   // ambient dimension
+        let k = basis.len();   // number of basis vectors
+
+        // Empty basis => n x 0 matrix
+        if k == 0 {
+            return BitMatrix::zeros(n, 0);
+        }
+
+        debug_assert!(basis.iter().all(|v| v.rows() == 1 && v.cols() == n));
+
+        // basis[j] is a 1 x n row-vector, so its i-th entry is bit(0, i).
+        // Put that into column j of the output.
+        BitMatrix::build(n, k, |i, j| basis[j].bit(0, i))
+    }
+
 }
 
 /// Two matrices are considered equal if they represent the same logical matrix, possibly with different
